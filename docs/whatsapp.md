@@ -9,7 +9,7 @@ Para enviarlos de verdad:
 
 | Plantilla | Para | Variables en orden |
 |---|---|---|
-| `solicitud_recibida` | clienta | nombre, spa, servicio, fecha, hora, manicurista |
+| `solicitud_recibida` | clienta | nombre, spa, servicio, fecha, hora, manicurista, plazo |
 | `cita_confirmada` | clienta | nombre, fecha, hora, manicurista, sede, dirección |
 | `cita_rechazada` | clienta | nombre, fecha, hora, link |
 | `cita_cancelada` | clienta | nombre, fecha, hora, link |

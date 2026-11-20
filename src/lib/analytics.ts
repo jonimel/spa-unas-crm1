@@ -78,7 +78,7 @@ export async function statsFor(tenantId: string, tz: string, view: View, month: 
     rows<Pay>(`select amount, tip, method::text method, null as service, barber_id, client_id, paid_at from payments where tenant_id = $1 and paid_at >= $2 and paid_at < $3 ${bf}`, params(prevStart, prevEnd)),
     rows<Appt>(`select barber_id, client_id, starts_at, ends_at, status::text status from appointments where tenant_id = $1 and starts_at >= $2 and starts_at < $3 ${bf}`, params(start, end)),
     rows<Appt>(`select barber_id, client_id, starts_at, ends_at, status::text status from appointments where tenant_id = $1 and starts_at >= $2 and starts_at < $3 ${bf}`, params(prevStart, prevEnd)),
-    rows<{ id: string; name: string; active: boolean }>(`select id, name, active from users where tenant_id = $1 and role = 'barber' order by name`, [tenantId]),
+    rows<{ id: string; name: string; active: boolean }>(`select id, name, active from users where tenant_id = $1 and (role = 'barber' or serves) order by name`, [tenantId]),
     rows<Hours>(`select barber_id, weekday, start_min, end_min from working_hours where tenant_id = $1 ${branchId ? 'and branch_id = $2' : ''}`, branchId ? [tenantId, branchId] : [tenantId]),
     rows<{ client_id: string; first: Date }>(`select client_id, min(starts_at) first from appointments where tenant_id = $1 and status = 'completed' group by client_id`, [tenantId]),
     // qué se vende: cada servicio de la cita (también los adicionales) con su parte del valor cobrado

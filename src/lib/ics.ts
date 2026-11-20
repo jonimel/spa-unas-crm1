@@ -6,7 +6,7 @@ const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}
 
 /** Escapa texto según RFC 5545 (barra, punto y coma, coma y saltos de línea). */
 export function icsText(s: string) {
-  return s.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
+  return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
 }
 
 /** Corta las líneas largas a 75 octetos, como pide el estándar (las siguientes empiezan con un espacio). */

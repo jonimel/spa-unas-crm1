@@ -58,7 +58,8 @@ describe('agregar a mi calendario (.ics)', () => {
   })
 
   it('escapa comas, punto y coma y saltos de línea', () => {
-    expect(icsText('a,b;c\\d\ne')).toBe('a\\,b\;c\\\\d\\ne')
+    expect(icsText('a,b;c\\d\ne')).toBe('a\\,b\\;c\\\\d\\ne')
+    expect(icsText('Spa; Uñas')).toBe('Spa\\; Uñas')
   })
 
   it('la ruta lo descarga como text/calendar; otra cita u otro spa dan 404', async () => {

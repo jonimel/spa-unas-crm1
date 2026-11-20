@@ -29,8 +29,12 @@ export function weekdayOf(ymd: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
 }
 
+/** Fecha YYYY-MM-DD que existe en el calendario (2026-02-30 o 2026-13-01 no). */
 export function isYmd(s: unknown): s is string {
-  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const [y, m, d] = s.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
 }
 
 // ---------- formato (es-CO) ----------
@@ -75,6 +79,15 @@ export function fmtDuration(min: number) {
   const h = Math.floor(min / 60)
   const m = min % 60
   return m ? `${h} h ${m} min` : `${h} h`
+}
+
+/** Un plazo dicho en palabras: "2 horas", "1 hora", "45 minutos", "1 h 30 min". */
+export function fmtSpan(min: number) {
+  min = Math.max(1, Math.round(min))
+  if (min < 60) return `${min} ${min === 1 ? 'minuto' : 'minutos'}`
+  if (min % 60) return fmtDuration(min)
+  const h = min / 60
+  return `${h} ${h === 1 ? 'hora' : 'horas'}`
 }
 
 function cap(s: string) {

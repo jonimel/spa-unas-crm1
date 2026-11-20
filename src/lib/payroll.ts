@@ -37,6 +37,12 @@ export async function schemesFor(tenantId: string, on?: Queryable): Promise<Map<
   return m
 }
 
+export const OWNER_RULE = 'Dueña: todo para el spa'
+
+function ownerShare(s: ReturnType<typeof computeShare>): ReturnType<typeof computeShare> {
+  return { ...s, barberShare: 0, barberTip: 0, rule: OWNER_RULE, lines: s.lines.map((l) => ({ ...l, barberShare: 0, rule: OWNER_RULE })) }
+}
+
 /** Calcula y guarda la repartición de los pagos que aún no la tienen (pagos nuevos o de antes de la fase 2), línea por línea. */
 export async function settlePending(on: PGlite | Transaction, tenantId?: string) {
   const pending = await rows<{ id: string; appointment_id: string | null; tenant_id: string; barber_id: string; service_id: string | null; amount: number; tip: number; method: string }>(
@@ -52,18 +58,23 @@ export async function settlePending(on: PGlite | Transaction, tenantId?: string)
   )
   const byAppt = new Map<string, typeof lineRows>()
   for (const l of lineRows) byAppt.set(l.appointment_id, [...(byAppt.get(l.appointment_id) ?? []), l])
-  const cache = new Map<string, { shop: ShopRules; schemes: Map<string, Scheme> }>()
+  const cache = new Map<string, { shop: ShopRules; schemes: Map<string, Scheme>; owners: Set<string> }>()
   const done: unknown[][] = []
   const lineDone: unknown[][] = []
   for (const p of pending) {
-    if (!cache.has(p.tenant_id)) cache.set(p.tenant_id, { shop: await shopRules(p.tenant_id, on), schemes: await schemesFor(p.tenant_id, on) })
+    if (!cache.has(p.tenant_id))
+      cache.set(p.tenant_id, {
+        shop: await shopRules(p.tenant_id, on),
+        schemes: await schemesFor(p.tenant_id, on),
+        owners: new Set((await rows<{ id: string }>(`select id from users where tenant_id = $1 and role = 'owner'`, [p.tenant_id], on)).map((u) => u.id)),
+      })
     const c = cache.get(p.tenant_id)!
     const lines = (p.appointment_id && byAppt.get(p.appointment_id)) || []
-    const s = computeShare(
-      { amount: p.amount, tip: p.tip, method: p.method, serviceId: p.service_id, lines: lines.map((l) => ({ serviceId: l.service_id, price: l.price })) },
-      c.schemes.get(p.barber_id) ?? null,
-      c.shop,
-    )
+    const input = { amount: p.amount, tip: p.tip, method: p.method, serviceId: p.service_id, lines: lines.map((l) => ({ serviceId: l.service_id, price: l.price })) }
+    // la dueña que también atiende: lo que cobra (servicio y propina) es todo del spa
+    const s = c.owners.has(p.barber_id)
+      ? ownerShare(computeShare(input, { model: 'percent', percent: 0, rentAmount: null, rentPeriod: null, rates: {} }, { ...c.shop, tipsToBarber: false, deductCardFee: false }))
+      : computeShare(input, c.schemes.get(p.barber_id) ?? null, c.shop)
     done.push([p.id, s.barberShare, s.barberTip, s.shopShare, s.rule])
     lines.forEach((l, i) => lineDone.push([l.id, s.lines[i].charged, s.lines[i].barberShare, s.lines[i].rule]))
   }

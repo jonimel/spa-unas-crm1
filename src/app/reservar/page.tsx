@@ -18,7 +18,7 @@ export default async function Reservar({ searchParams }: PageProps<'/reservar'>)
     `select t.slug, t.name, t.city from tenants t
       where exists (select 1 from services s where s.tenant_id = t.id and s.active)
         and exists (select 1 from users u join working_hours w on w.barber_id = u.id
-                     where u.tenant_id = t.id and u.active and u.role = 'barber')
+                     where u.tenant_id = t.id and u.active and (u.role = 'barber' or u.serves))
         and ($1 = '' or t.name ilike $2 or coalesce(t.city, '') ilike $2)
       order by t.name limit ${LIMIT + 1}`,
     [q, like],

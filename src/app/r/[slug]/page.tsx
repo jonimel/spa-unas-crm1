@@ -1,3 +1,5 @@
+import { headers } from 'next/headers'
+import { rememberHost } from '@/lib/base-url'
 import { notFound } from 'next/navigation'
 import { ShopMark } from '@/components/ShopLogo'
 import { Icon } from '@/components/Icon'
@@ -13,13 +15,14 @@ export async function generateMetadata({ params }: PageProps<'/r/[slug]'>) {
 
 export default async function BookingPage({ params }: PageProps<'/r/[slug]'>) {
   const { slug } = await params
+  rememberHost((await headers()).get('host'))
   const t = await tenantBySlug(slug)
   if (!t) notFound()
   const { branches, services } = await bookingCatalog(t.id)
   const barbers = await rows<{ id: string; name: string; branch_ids: string[] }>(
     `select u.id, u.name, array_agg(distinct w.branch_id) as branch_ids
        from users u join working_hours w on w.barber_id = u.id
-      where u.tenant_id = $1 and u.active and u.role = 'barber'
+      where u.tenant_id = $1 and u.active and (u.role = 'barber' or u.serves)
       group by u.id, u.name order by u.name`,
     [t.id],
   )

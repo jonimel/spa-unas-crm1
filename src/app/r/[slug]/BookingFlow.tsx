@@ -12,7 +12,7 @@ type Branch = { id: string; name: string; address: string | null }
 type Service = { id: string; name: string; description: string | null; duration_min: number; price: number; is_addon: boolean }
 type Barber = { id: string; name: string; branch_ids: string[] }
 type SlotDto = { minutes: number; start: string; label: string; barberIds: string[] }
-type Avail = { date: string; days: { ymd: string; free: number }[]; slots: SlotDto[] }
+type Avail = { date: string; days: { ymd: string; free: number; open?: boolean }[]; slots: SlotDto[] }
 
 const STORE = 'spa:me'
 const short = (n: string) => n.split(' ')[0]
@@ -395,7 +395,7 @@ export function BookingFlow(props: {
               >
                 <small>{f.wd}</small>
                 <b>{f.day}</b>
-                <em>{d.free ? f.mo : 'lleno'}</em>
+                <em>{d.free ? f.mo : d.open === false ? 'cerrado' : 'lleno'}</em>
               </button>
             )
           })}
@@ -410,7 +410,7 @@ export function BookingFlow(props: {
                   <Icon name="users" />
                 </span>
                 <span>
-                  Cualquiera<small>El primero libre</small>
+                  Cualquiera<small>La primera libre</small>
                 </span>
               </button>
               {branchBarbers.map((b) => {
@@ -580,7 +580,7 @@ export function BookingFlow(props: {
         <dt>Duración</dt>
         <dd>{fmtDuration(totalMin)}</dd>
         <dt>Manicurista</dt>
-        <dd>{barberId ? barberName(barberId) : 'El primero libre'}</dd>
+        <dd>{barberId ? barberName(barberId) : 'La primera libre'}</dd>
         <dt>Fecha</dt>
         <dd>
           {date && `${fmtYmdShort(date).wd} ${fmtYmdShort(date).day} ${fmtYmdShort(date).mo}`} · {slot?.label}

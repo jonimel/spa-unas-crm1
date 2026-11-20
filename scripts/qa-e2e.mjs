@@ -114,7 +114,7 @@ if (!process.env.OWNER) {
 // ---------- 2. dueño y manicuristas: todas las páginas ----------
 const owner = await page('dueño')
 await login(owner, OWNER, 'dueno')
-const n = await crawl(owner, 'dueño', ['/app/agenda', '/app/ajustes', '/app/analisis', '/app/comisiones', '/app/mensajes', '/app/clientes', '/app/nueva', '/app/cuenta'])
+const n = await crawl(owner, 'dueño', ['/app/agenda', '/app/agenda?sede=foo&manicurista=bar&date=2026-02-30', '/app/ajustes', '/app/analisis', '/app/comisiones', '/app/mensajes', '/app/clientes', '/app/nueva', '/app/cuenta'])
 check(n > 10, `el dueño abre ${n} páginas`)
 
 const barber = await page('manicurista')
@@ -181,9 +181,10 @@ if (!READONLY) {
     const chargeable = (await mine.getByRole('link', { name: /Cobrar visita/ }).count()) > 0
     if (!chargeable) {
       await mine.goto(`${BASE}/app/cobrar/${apptId}`)
-      await mine.getByRole('button', { name: /Registrar pago/ }).click()
-      await mine.waitForURL(/err=/, { timeout: 15000 })
-      check(/3 horas antes/.test(await mine.locator('body').innerText()), 'una cita de más tarde no se deja cobrar antes de tiempo (aviso claro)')
+      check(
+        /3 horas antes/.test(await mine.locator('body').innerText()) && (await mine.getByRole('button', { name: /Registrar pago/ }).count()) === 0,
+        'una cita de más tarde no se deja cobrar antes de tiempo (aviso claro, sin formulario)',
+      )
     }
     // clienta de paso "ahora" (el dueño prueba con cada manicurista hasta encontrar una libre)
     let payPage = null

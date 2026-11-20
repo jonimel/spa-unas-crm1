@@ -1,13 +1,15 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { isUuid } from '@/lib/validate'
 import { Icon } from '@/components/Icon'
 import { Avatar, Flash, METHOD_LABEL, Top } from '@/components/ui'
 import { requireUser } from '@/lib/auth'
-import { PAY_METHODS } from '@/lib/appointments'
+import { canChargeAt, PAY_METHODS } from '@/lib/appointments'
 import { apptView } from '@/lib/booking'
 import { fmtMoney } from '@/lib/time'
 import { checkoutAction } from '../../actions'
 
-const UUID = /^[0-9a-f-]{36}$/i
+const UUID = { test: isUuid }
 const METHOD_ICON: Record<string, string> = { efectivo: 'cash', nequi: 'phone', daviplata: 'phone', tarjeta: 'card', transferencia: 'link' }
 
 export default async function Cobrar({ params, searchParams }: PageProps<'/app/cobrar/[id]'>) {
@@ -25,6 +27,20 @@ export default async function Cobrar({ params, searchParams }: PageProps<'/app/c
       {a.status === 'completed' ? (
         <div className="empty" style={{ marginTop: 16 }}>
           Esta visita ya fue cobrada{a.paid_amount !== null ? `: ${fmtMoney(a.paid_amount + (a.paid_tip ?? 0))}` : ''}.
+        </div>
+      ) : !['pending', 'confirmed'].includes(a.status) ? (
+        <div className="empty plain" style={{ marginTop: 16 }}>
+          {a.status === 'cancelled' ? 'Esta cita fue cancelada' : a.status === 'no_show' ? 'Esta cita quedó como “no vino”' : 'Esta solicitud fue rechazada'}: no hay nada que cobrar.{' '}
+          <Link className="link" href={`/app/cita/${id}`}>
+            Ver la cita
+          </Link>
+        </div>
+      ) : !canChargeAt(a) ? (
+        <div className="empty plain" style={{ marginTop: 16 }}>
+          Esta cita es el {a.day} a las {a.time}. El cobro se habilita 3 horas antes de la hora de inicio.{' '}
+          <Link className="link" href={`/app/cita/${id}`}>
+            Ver la cita
+          </Link>
         </div>
       ) : (
         <form action={checkoutAction}>

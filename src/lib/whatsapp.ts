@@ -13,8 +13,8 @@ export type TemplateName = keyof Templates
 export const TEMPLATES = {
   solicitud_recibida: {
     to: 'client',
-    params: ['nombre', 'spa', 'servicio', 'fecha', 'hora', 'manicurista'],
-    text: 'Hola {nombre} 👋 Recibimos tu solicitud en {spa}: {servicio} el {fecha} a las {hora} con {manicurista}. Te confirmamos por aquí en máximo 2 horas.',
+    params: ['nombre', 'spa', 'servicio', 'fecha', 'hora', 'manicurista', 'plazo'],
+    text: 'Hola {nombre} 👋 Recibimos tu solicitud en {spa}: {servicio} el {fecha} a las {hora} con {manicurista}. Te confirmamos por aquí en máximo {plazo}.',
   },
   cita_confirmada: {
     to: 'client',

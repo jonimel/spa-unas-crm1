@@ -1,7 +1,8 @@
 import { apptView, bookingLink } from '@/lib/booking'
+import { isUuid } from '@/lib/validate'
 import { appointmentIcs } from '@/lib/ics'
 
-const UUID = /^[0-9a-f-]{36}$/i
+const UUID = { test: isUuid }
 
 /** "Agregar a mi calendario": descarga la cita como .ics. */
 export async function GET(_req: Request, ctx: RouteContext<'/api/r/[slug]/cita/[id]/calendario'>) {

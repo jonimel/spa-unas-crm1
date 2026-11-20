@@ -1,8 +1,10 @@
 import { one, rows, tx, type Queryable } from './db'
 import { computeSlots, type BarberDay, type Slot } from './availability'
-import { addDaysYmd, atLocal, fmtDay, fmtTime, localParts, todayYmd, weekdayOf } from './time'
+import { addDaysYmd, atLocal, fmtDay, fmtSpan, fmtTime, isYmd, localParts, todayYmd, weekdayOf } from './time'
 import { firstName, normalizeCoPhone } from './phone'
 import { sendWhatsApp } from './whatsapp'
+import { isUuid } from './validate'
+import { publicBase } from './base-url'
 
 export type Tenant = {
   id: string
@@ -40,12 +42,15 @@ export async function bookingCatalog(tenantId: string) {
   return { branches, services }
 }
 
+/** Quién recibe citas: las manicuristas y la dueña que marcó "Yo también atiendo" (alias de la tabla users: u). */
+export const BOOKABLE = `(u.role = 'barber' or u.serves)`
+
 /** Manicuristas que trabajan en una sede (tienen horario allí). */
 export async function barbersOfBranch(tenantId: string, branchId: string, on?: Queryable) {
   return rows<Barber>(
     `select distinct u.id, u.name, u.phone, u.branch_id
        from users u join working_hours w on w.barber_id = u.id
-      where u.tenant_id = $1 and w.branch_id = $2 and u.active and u.role = 'barber'
+      where u.tenant_id = $1 and w.branch_id = $2 and u.active and ${BOOKABLE}
       order by u.name`,
     [tenantId, branchId],
     on,
@@ -53,10 +58,11 @@ export async function barbersOfBranch(tenantId: string, branchId: string, on?: Q
 }
 
 async function barberDays(t: Tenant, branchId: string, ymd: string, onlyBarber: string | null, on?: Queryable): Promise<BarberDay[]> {
+  if (!isUuid(branchId) || (onlyBarber && !isUuid(onlyBarber)) || !isYmd(ymd)) return []
   const wd = weekdayOf(ymd)
   const hours = await rows<{ barber_id: string; start_min: number; end_min: number }>(
     `select w.barber_id, w.start_min, w.end_min
-       from working_hours w join users u on u.id = w.barber_id and u.active and u.role = 'barber'
+       from working_hours w join users u on u.id = w.barber_id and u.tenant_id = w.tenant_id and u.active and ${BOOKABLE}
       where w.tenant_id = $1 and w.branch_id = $2 and w.weekday = $3 ${onlyBarber ? 'and w.barber_id = $4' : ''}
       order by w.start_min`,
     onlyBarber ? [t.id, branchId, wd, onlyBarber] : [t.id, branchId, wd],
@@ -68,11 +74,11 @@ async function barberDays(t: Tenant, branchId: string, ymd: string, onlyBarber: 
   const dayEnd = atLocal(addDaysYmd(ymd, 1), 0, t.timezone)
   const busy = await rows<{ barber_id: string; start: Date; end: Date }>(
     `select barber_id, starts_at as start, ends_at as "end" from appointments
-      where barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at < $3 and ends_at > $2
+      where tenant_id = $4 and barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at < $3 and ends_at > $2
      union all
      select barber_id, starts_at, ends_at from time_off
-      where barber_id = any($1) and starts_at < $3 and ends_at > $2`,
-    [ids, dayStart, dayEnd],
+      where tenant_id = $4 and barber_id = any($1) and starts_at < $3 and ends_at > $2`,
+    [ids, dayStart, dayEnd, t.id],
     on,
   )
   return ids.map((id) => ({
@@ -102,11 +108,12 @@ export async function slotsFor(
 /** Resumen de los próximos días para la tira de fechas: cuántas horas libres hay en cada uno. */
 export async function daysOverview(t: Tenant, branchId: string, durationMin: number) {
   const start = todayYmd(t.timezone)
-  const out: { ymd: string; free: number }[] = []
+  const out: { ymd: string; free: number; open: boolean }[] = []
   for (let i = 0; i < t.booking_days_ahead; i++) {
     const ymd = addDaysYmd(start, i)
-    const s = await slotsFor(t, { branchId, durationMin, ymd })
-    out.push({ ymd, free: s.length })
+    const barbers = await barberDays(t, branchId, ymd, null)
+    const s = computeSlots({ ymd, tz: t.timezone, durationMin, stepMin: t.slot_step_min, now: new Date(), minNoticeMin: t.min_notice_min, barbers })
+    out.push({ ymd, free: s.length, open: barbers.length > 0 })
   }
   return out
 }
@@ -133,8 +140,8 @@ async function pickBarber(candidates: string[], t: Tenant, ymd: string, on: Quer
   const dayEnd = atLocal(addDaysYmd(ymd, 1), 0, t.timezone)
   const counts = await rows<{ barber_id: string; n: number }>(
     `select barber_id, count(*)::int n from appointments
-      where barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at >= $2 and starts_at < $3 group by barber_id`,
-    [candidates, dayStart, dayEnd],
+      where tenant_id = $4 and barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at >= $2 and starts_at < $3 group by barber_id`,
+    [candidates, dayStart, dayEnd, t.id],
     on,
   )
   const n = (id: string) => counts.find((c) => c.barber_id === id)?.n ?? 0
@@ -162,7 +169,7 @@ export async function loadServices(tenantId: string, ids: string[], on?: Queryab
   const uniq = [...new Set(ids.filter(Boolean))]
   if (!uniq.length) throw new BookingError('Elige al menos un servicio')
   if (uniq.length > 8) throw new BookingError('Son demasiados servicios para una sola cita')
-  if (!uniq.every((id) => /^[0-9a-f-]{36}$/i.test(id))) throw new BookingError('Servicio no disponible')
+  if (!uniq.every(isUuid)) throw new BookingError('Servicio no disponible')
   const found = await rows<Service>(
     'select id, name, description, duration_min, price, is_addon from services where tenant_id = $1 and active and id = any($2)',
     [tenantId, uniq],
@@ -190,6 +197,7 @@ export async function createAppointment(b: NewBooking) {
     if (!t) throw new BookingError('Spa no encontrado')
     const svcs = await loadServices(t.id, b.serviceIds ?? (b.serviceId ? [b.serviceId] : []), on)
     const { duration, price } = comboTotals(svcs)
+    if (!isUuid(b.branchId)) throw new BookingError('Sede no disponible')
     const branch = await one<Branch>('select id, name, address, phone from branches where id = $1 and tenant_id = $2 and active', [b.branchId, t.id], on)
     if (!branch) throw new BookingError('Sede no disponible')
 
@@ -208,7 +216,8 @@ export async function createAppointment(b: NewBooking) {
     } else {
       // en el spa (clienta de paso / la manicurista agenda): cualquier minuto, solo sin cruces
       if (!b.barberId) throw new BookingError('Elige la manicurista')
-      const barber = await one('select 1 from users where id = $1 and tenant_id = $2 and role = $3 and active', [b.barberId, t.id, 'barber'], on)
+      if (!isUuid(b.barberId)) throw new BookingError('Manicurista no disponible')
+      const barber = await one(`select 1 from users u where u.id = $1 and u.tenant_id = $2 and u.active and ${BOOKABLE}`, [b.barberId, t.id], on)
       if (!barber) throw new BookingError('Manicurista no disponible')
       const end = new Date(b.start.getTime() + duration * 60_000)
       const clash = await one<{ starts_at: Date; ends_at: Date }>(
@@ -249,7 +258,10 @@ export async function createAppointment(b: NewBooking) {
       if (v.client_phone)
         await sendWhatsApp({
           tenantId: v.tenant_id, toPhone: v.client_phone, template: 'solicitud_recibida', appointmentId: id,
-          vars: { nombre: firstName(v.client_name), spa: v.tenant_name, servicio: v.service_name, fecha: v.day, hora: v.time, manicurista: v.barber_name },
+          vars: {
+            nombre: firstName(v.client_name), spa: v.tenant_name, servicio: v.service_name, fecha: v.day, hora: v.time, manicurista: v.barber_name,
+            plazo: fmtSpan(v.approval_deadline ? (new Date(v.approval_deadline).getTime() - new Date(v.created_at).getTime()) / 60_000 : 120),
+          },
         })
       await sendWhatsApp({
         tenantId: v.tenant_id, toPhone: v.barber_phone, template: 'manicurista_nueva_solicitud', appointmentId: id,
@@ -350,6 +362,7 @@ export function decorate<T extends Omit<ApptView, 'day' | 'time' | 'deadline_tim
 }
 
 export async function apptView(id: string, on?: Queryable): Promise<ApptView | null> {
+  if (!isUuid(id)) return null
   const r = await one<Omit<ApptView, 'day' | 'time' | 'deadline_time'>>(`${APPT_SELECT} where a.id = $1`, [id], on)
   return r ? decorate(r) : null
 }
@@ -373,10 +386,6 @@ export async function spaWhatsApp(tenantId: string, branchId?: string | null, on
   return normalizeCoPhone(r?.branch ?? '') ?? normalizeCoPhone(r?.owner ?? '')
 }
 
-function publicBase() {
-  const railway = process.env.RAILWAY_PUBLIC_DOMAIN && `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-  return (process.env.PUBLIC_URL || railway || 'http://localhost:3000').replace(/\/+$/, '')
-}
 
 /** Link público para que las clientas reserven (sin nada del equipo a la vista). */
 export function bookingLink(slug: string) {

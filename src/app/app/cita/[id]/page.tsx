@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isUuid } from '@/lib/validate'
 import { notFound } from 'next/navigation'
 import { Icon } from '@/components/Icon'
 import { Avatar, Flash, METHOD_LABEL, StatusPill, Top } from '@/components/ui'
@@ -10,7 +11,7 @@ import { fmtPhone } from '@/lib/phone'
 import { fmtDuration, fmtMoney, fmtTime, localParts } from '@/lib/time'
 import { approveAction, cancelAction, noShowAction, rejectAction } from '../../actions'
 
-const UUID = /^[0-9a-f-]{36}$/i
+const UUID = { test: isUuid }
 
 export default async function Cita({ params, searchParams }: PageProps<'/app/cita/[id]'>) {
   const user = await requireUser()

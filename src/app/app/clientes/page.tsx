@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Icon } from '@/components/Icon'
 import { Avatar, Top } from '@/components/ui'
 import { requireUser } from '@/lib/auth'
+import { likeEscape } from '@/lib/validate'
 import { rows } from '@/lib/db'
 import { fmtPhone } from '@/lib/phone'
 import { fmtDay } from '@/lib/time'
@@ -14,11 +15,11 @@ export default async function Clientes({ searchParams }: PageProps<'/app/cliente
   const params: unknown[] = [user.tenant_id]
   let filter = ''
   if (q) {
-    params.push(`%${q.toLowerCase()}%`)
+    params.push(`%${likeEscape(q.toLowerCase())}%`)
     filter = `and (lower(c.name) like $2${digits.length >= 3 ? ` or c.phone like $3` : ''})`
     if (digits.length >= 3) params.push(`%${digits}%`)
   }
-  // la manicurista ve todos los clientes del spa (para reconocer a quien llega), pero sin montos
+  // la manicurista ve todas las clientas del spa (para reconocer a quien llega), pero sin montos
   const list = await rows<{ id: string; name: string; phone: string | null; visits: number; last: Date | null }>(
     `select c.id, c.name, c.phone,
             count(a.id) filter (where a.status = 'completed')::int visits,

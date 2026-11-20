@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { Icon } from '@/components/Icon'
 import { Avatar, Flash, StatusPill } from '@/components/ui'
 import { requireUser } from '@/lib/auth'
+import { uuidOrNull } from '@/lib/validate'
+import { canChargeAt } from '@/lib/appointments'
 import { apptList, type ApptView } from '@/lib/booking'
 import { one, rows } from '@/lib/db'
 import { firstName } from '@/lib/phone'
@@ -15,14 +17,15 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
   const today = todayYmd(tz)
   const date = isYmd(sp.date) ? sp.date : today
   const owner = user.role === 'owner'
-  const branchF = owner && typeof sp.sede === 'string' ? sp.sede : ''
-  const barberF = owner && typeof sp.manicurista === 'string' ? sp.manicurista : ''
+  // filtros de la URL: un valor que no es un id válido se ignora
+  const branchF = owner ? (uuidOrNull(sp.sede) ?? '') : ''
+  const barberF = owner ? (uuidOrNull(sp.manicurista) ?? '') : ''
 
   const branches = owner ? await rows<{ id: string; name: string }>('select id, name from branches where tenant_id = $1 and active order by sort', [user.tenant_id]) : []
   const barbers = owner
     ? await rows<{ id: string; name: string }>(
         `select distinct u.id, u.name from users u left join working_hours w on w.barber_id = u.id
-          where u.tenant_id = $1 and u.role = 'barber' and u.active ${branchF ? 'and w.branch_id = $2' : ''} order by u.name`,
+          where u.tenant_id = $1 and (u.role = 'barber' or u.serves) and u.active ${branchF ? 'and w.branch_id = $2' : ''} order by u.name`,
         branchF ? [user.tenant_id, branchF] : [user.tenant_id],
       )
     : []
@@ -235,7 +238,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
                     </div>
                     <div className="right">
                       <StatusPill status={a.status} />
-                      {a.status === 'confirmed' && (isToday || date < today) && <div className="small" style={{ color: 'var(--brass)', marginTop: 6, fontWeight: 700 }}>Cobrar →</div>}
+                      {a.status === 'confirmed' && canChargeAt(a) && <div className="small" style={{ color: 'var(--brass)', marginTop: 6, fontWeight: 700 }}>Cobrar →</div>}
                     </div>
                   </div>
                 </Link>

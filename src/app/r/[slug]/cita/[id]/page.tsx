@@ -1,17 +1,18 @@
 import { ShopMark } from '@/components/ShopLogo'
+import { isUuid } from '@/lib/validate'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Icon } from '@/components/Icon'
 import { Flash, StatusPill } from '@/components/ui'
-import { clientCanCancel } from '@/lib/appointments'
+import { CLIENT_CANCEL_MIN_MS, clientCanCancel } from '@/lib/appointments'
 import { apptView, spaWhatsApp } from '@/lib/booking'
 import { rows } from '@/lib/db'
 import { firstName, waLink } from '@/lib/phone'
-import { fmtDuration, fmtMoney } from '@/lib/time'
+import { fmtDuration, fmtMoney, fmtSpan } from '@/lib/time'
 import { whatsappMode } from '@/lib/whatsapp'
 import { cancelMyAppointment } from '../../actions'
 
-const UUID = /^[0-9a-f-]{36}$/i
+const UUID = { test: isUuid }
 
 export default async function CitaPublica({ params, searchParams }: PageProps<'/r/[slug]/cita/[id]'>) {
   const { slug, id } = await params
@@ -52,7 +53,7 @@ export default async function CitaPublica({ params, searchParams }: PageProps<'/
         <h2>{pending ? '¡Listo! Solicitud enviada' : ok ? 'Cita confirmada' : a.status === 'cancelled' ? 'Cita cancelada' : 'Cita no confirmada'}</h2>
         <p>
           {pending
-            ? `${firstName(a.barber_name)} confirma tu cita en máximo 2 horas. Te avisamos por WhatsApp.`
+            ? `${firstName(a.barber_name)} confirma tu cita ${a.deadline_time ? `antes de las ${a.deadline_time}` : 'muy pronto'}. Te avisamos por WhatsApp.`
             : ok
               ? `Te esperamos en ${a.branch_name}${a.branch_address ? `, ${a.branch_address}` : ''}.`
               : 'Puedes elegir otra hora cuando quieras.'}
@@ -141,7 +142,7 @@ export default async function CitaPublica({ params, searchParams }: PageProps<'/
           </details>
         ) : (
           <p className="small muted" style={{ textAlign: 'center', marginTop: 12 }}>
-            Faltan menos de 2 horas: para cancelar o cambiar, escríbenos por WhatsApp.
+            Faltan menos de {fmtSpan(CLIENT_CANCEL_MIN_MS / 60_000)}: para cancelar o cambiar, escríbenos por WhatsApp.
           </p>
         ))}
     </main>

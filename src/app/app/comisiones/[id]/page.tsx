@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isUuid } from '@/lib/validate'
 import { notFound } from 'next/navigation'
 import { Icon } from '@/components/Icon'
 import { Flash, METHOD_LABEL, Top } from '@/components/ui'
@@ -10,7 +11,7 @@ import { period } from '@/lib/periods'
 import { fmtDayShort as dayLabel, fmtMoney, plural, todayYmd } from '@/lib/time'
 import { recordPayout, saveBarberScheme, voidPayout } from '../../actions'
 
-const UUID = /^[0-9a-f-]{36}$/i
+const UUID = { test: isUuid }
 const METHOD_ICON: Record<string, string> = { efectivo: 'cash', nequi: 'phone', daviplata: 'phone', transferencia: 'link' }
 const UNIT: Record<string, string> = { daily: 'diario', weekly: 'semanal', monthly: 'mensual' }
 

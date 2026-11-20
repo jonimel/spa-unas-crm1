@@ -310,7 +310,7 @@ export async function seedIfEmpty(db: PGlite) {
               const servicio = combo.map((x) => x.name).join(' + ')
               const nombre = firstName(c.name)
               if (source === 'online') {
-                msg(c.phone, 'client', 'solicitud_recibida', { nombre, spa: 'Spa Uñas Bella', servicio, fecha: day, hora: time, manicurista: bn }, id, created)
+                msg(c.phone, 'client', 'solicitud_recibida', { nombre, spa: 'Spa Uñas Bella', servicio, fecha: day, hora: time, manicurista: bn, plazo: '2 horas' }, id, created)
                 msg(DEMO.barbers[bi].phone, 'barber', 'manicurista_nueva_solicitud', { manicurista: firstName(bn), cliente: c.name, servicio, fecha: day, hora: time, limite: fmtTime(new Date(created.getTime() + mins(120)), TZ) }, id, created)
               }
               if (status !== 'pending' && decided && source === 'online')

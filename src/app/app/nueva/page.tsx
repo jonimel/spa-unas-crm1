@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { Flash, Top } from '@/components/ui'
 import { requireUser } from '@/lib/auth'
 import { bookingCatalog } from '@/lib/booking'
@@ -13,7 +14,7 @@ export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
   const barbers =
     user.role === 'owner'
       ? await rows<{ id: string; name: string; branch: string | null }>(
-          `select u.id, u.name, b.name branch from users u left join branches b on b.id = u.branch_id where u.tenant_id = $1 and u.role = 'barber' and u.active order by u.name`,
+          `select u.id, u.name, b.name branch from users u left join branches b on b.id = u.branch_id where u.tenant_id = $1 and (u.role = 'barber' or u.serves) and u.active order by (u.role = 'owner') desc, u.name`,
           [user.tenant_id],
         )
       : []
@@ -26,14 +27,36 @@ export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
     <main>
       <Top title="Nueva cita" sub="Clienta de paso o cita por teléfono" back="/app/agenda" />
       <Flash err={sp.err as string} />
-      <NuevaForm
-        action={newAppointmentAction}
-        services={services}
-        barbers={barbers}
-        isOwner={user.role === 'owner'}
-        today={todayYmd(user.timezone)}
-        hh={hh}
-      />
+      {user.role === 'owner' && barbers.length === 0 ? (
+        <div className="empty" style={{ marginTop: 16 }}>
+          Todavía no hay quién atienda: agrega una manicurista (o marca “Yo también atiendo”) para poder agendar.
+          <div
+            className="row"
+            style={{
+              gap: 8,
+              marginTop: 12,
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Link className="btn sm" href="/app/ajustes/manicurista/nuevo">
+              Agregar manicurista
+            </Link>
+            <Link className="btn ghost sm" href={`/app/ajustes/manicurista/${user.id}`}>
+              Yo también atiendo
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <NuevaForm
+          action={newAppointmentAction}
+          services={services}
+          barbers={barbers}
+          isOwner={user.role === 'owner'}
+          today={todayYmd(user.timezone)}
+          hh={hh}
+        />
+      )}
     </main>
   )
 }

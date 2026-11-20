@@ -1,14 +1,15 @@
 import { one, rows, tx } from './db'
 import type { CurrentUser } from './auth'
 import { apptView, bookingLink, BookingError, type ApptView } from './booking'
-import { addDaysYmd, atLocal, todayYmd } from './time'
+import { addDaysYmd, atLocal, fmtSpan, todayYmd } from './time'
 import { firstName } from './phone'
 import { sendWhatsApp } from './whatsapp'
 import { settlePending } from './payroll'
+import { isUuid } from './validate'
 
 /** Dueña: todo. Manicurista: solo sus propias citas. */
 async function loadForUser(user: CurrentUser, id: string): Promise<ApptView> {
-  const a = await apptView(id)
+  const a = isUuid(id) ? await apptView(id) : null
   if (!a || a.tenant_id !== user.tenant_id) throw new BookingError('Cita no encontrada')
   if (user.role !== 'owner' && a.barber_id !== user.id) throw new BookingError('Esta cita es de otra manicurista')
   return a
@@ -73,10 +74,10 @@ export function clientCanCancel(a: Pick<ApptView, 'status' | 'starts_at'>, now =
  * Le confirmamos por WhatsApp y avisamos a su manicurista (WhatsApp + aviso en la app) y a la dueña (aviso en la app).
  */
 export async function cancelByClient(slug: string, id: string, now = new Date()) {
-  const a = await apptView(id)
+  const a = isUuid(id) ? await apptView(id) : null
   if (!a || a.tenant_slug !== slug) throw new BookingError('Cita no encontrada')
   if (!['pending', 'confirmed'].includes(a.status)) throw new BookingError('Esta cita ya no se puede cancelar')
-  if (!clientCanCancel(a, now)) throw new BookingError('Faltan menos de 2 horas para tu cita: escríbenos por WhatsApp para cancelarla.')
+  if (!clientCanCancel(a, now)) throw new BookingError(`Faltan menos de ${fmtSpan(CLIENT_CANCEL_MIN_MS / 60_000)} para tu cita: escríbenos por WhatsApp para cancelarla.`)
   await transition(id, ['pending', 'confirmed'], `status = 'cancelled', decided_at = now(), cancel_reason = $3`, ['Cancelada por la clienta'], 'Esta cita ya no se puede cancelar')
   await one(`update alerts set read_at = now() where appointment_id = $1 and read_at is null`, [id])
   const title = `${a.client_name} canceló su cita del ${a.day}, ${a.time} (${a.service_name})`

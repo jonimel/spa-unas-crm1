@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isUuid } from '@/lib/validate'
 import { notFound } from 'next/navigation'
 import { Icon } from '@/components/Icon'
 import { Avatar, Flash, StatusPill, Top } from '@/components/ui'
@@ -9,7 +10,7 @@ import { firstName, fmtPhone } from '@/lib/phone'
 import { fmtDay, fmtMoney } from '@/lib/time'
 import { saveClientNotes } from '../../actions'
 
-const UUID = /^[0-9a-f-]{36}$/i
+const UUID = { test: isUuid }
 
 export default async function Cliente({ params, searchParams }: PageProps<'/app/clientes/[id]'>) {
   const user = await requireUser()
@@ -93,18 +94,32 @@ export default async function Cliente({ params, searchParams }: PageProps<'/app/
         </div>
       </div>
 
-      {next && (
-        <Link href={`/app/cita/${next.id}`} className="card row" style={{ marginTop: 10, borderColor: 'rgba(var(--brass-rgb),.45)' }}>
-          <Icon name="cal" style={{ color: 'var(--brass)' }} />
-          <div className="grow">
-            <b>Próxima cita</b>
-            <div className="small muted">
-              {next.day} · {next.time} · {next.service_name} con {firstName(next.barber_name)}
+      {next &&
+        (() => {
+          const body = (
+            <>
+              <Icon name="cal" style={{ color: 'var(--brass)' }} />
+              <div className="grow">
+                <b>Próxima cita</b>
+                <div className="small muted">
+                  {next.day} · {next.time} · {next.service_name} con {firstName(next.barber_name)}
+                </div>
+              </div>
+              <StatusPill status={next.status} />
+            </>
+          )
+          const style = { marginTop: 10, borderColor: 'rgba(var(--brass-rgb),.45)' }
+          // la cita de otra manicurista se ve, pero no se abre (no puede tocarla)
+          return owner || next.barber_id === user.id ? (
+            <Link href={`/app/cita/${next.id}`} className="card row" style={style}>
+              {body}
+            </Link>
+          ) : (
+            <div className="card row" style={style}>
+              {body}
             </div>
-          </div>
-          <StatusPill status={next.status} />
-        </Link>
-      )}
+          )
+        })()}
 
       <div className="eyebrow">Ficha</div>
       <form action={saveClientNotes} className="stack">
