@@ -1,6 +1,6 @@
 # Conectar WhatsApp (Meta Cloud API)
 
-Mientras no haya credenciales, los mensajes se guardan como *simulados* y se ven en la pestaña **WhatsApp** del dueño.
+Mientras no haya credenciales, los mensajes se guardan como *simulados* y se ven en la pestaña **WhatsApp** de la dueña o el dueño del spa.
 
 Para enviarlos de verdad:
 
@@ -9,13 +9,18 @@ Para enviarlos de verdad:
 
 | Plantilla | Para | Variables en orden |
 |---|---|---|
-| `solicitud_recibida` | cliente | nombre, barbería, servicio, fecha, hora, barbero |
-| `cita_confirmada` | cliente | nombre, fecha, hora, barbero, sede, dirección |
-| `cita_rechazada` | cliente | nombre, fecha, hora, link |
-| `cita_cancelada` | cliente | nombre, fecha, hora, link |
-| `recordatorio` | cliente | nombre, hora, barbero, sede |
-| `barbero_nueva_solicitud` | barbero | barbero, cliente, servicio, fecha, hora, límite |
-| `dueno_sin_respuesta` | dueño | barbero, cliente, fecha, hora |
+| `solicitud_recibida` | clienta | nombre, spa, servicio, fecha, hora, manicurista, plazo |
+| `cita_confirmada` | clienta | nombre, fecha, hora, manicurista, sede, dirección |
+| `cita_rechazada` | clienta | nombre, fecha, hora, link |
+| `cita_cancelada` | clienta | nombre, fecha, hora, link |
+| `cancelada_por_clienta` | clienta | nombre, fecha, hora, link |
+| `recordatorio` | clienta | nombre, hora, manicurista, sede |
+| `retoque` | clienta | nombre, spa, servicio, días, link |
+| `manicurista_nueva_solicitud` | manicurista | manicurista, cliente, servicio, fecha, hora, límite |
+| `manicurista_cita_cancelada` | manicurista | manicurista, cliente, fecha, hora |
+| `dueno_sin_respuesta` | dueña | manicurista, cliente, fecha, hora |
+
+El recordatorio de retoque (`retoque`) sale a las 10 a. m. del día que toca (los días se configuran por servicio en Ajustes → Servicios), solo si la clienta no tiene otra cita después. Las variables `{servicio}` y `{dias}` dicen qué se hizo y hace cuánto.
 
 3. Crear `.env.local` en la raíz del proyecto:
 

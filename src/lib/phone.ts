@@ -29,3 +29,9 @@ export function initials(name: string) {
 export function firstName(name: string) {
   return name.trim().split(/\s+/)[0] ?? name
 }
+
+/** Link de WhatsApp (wa.me). Con celular abre el chat con ese número; sin celular, "compartir con…". */
+export function waLink(phone: string | null, text?: string) {
+  const q = text ? `?text=${encodeURIComponent(text)}` : ''
+  return phone ? `https://wa.me/57${phone}${q}` : `https://wa.me/${q}`
+}

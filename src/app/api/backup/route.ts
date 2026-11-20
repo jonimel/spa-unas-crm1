@@ -3,8 +3,8 @@ import { exportTenant, isShared, makeBackup } from '@/lib/backup'
 
 /**
  * Descargar una copia (solo el dueño).
- * - Una sola barbería en el servidor: la copia completa (.tar.gz, se restaura con `npm run restore`); también queda en backups/.
- * - Varias barberías: solo los datos de la suya, en JSON (nunca los de las otras).
+ * - Un solo spa en el servidor: la copia completa (.tar.gz, se restaura con `npm run restore`); también queda en backups/.
+ * - Varios spas: solo los datos de la suya, en JSON (nunca los de las otras).
  */
 export async function GET() {
   const user = await requireUser('owner')

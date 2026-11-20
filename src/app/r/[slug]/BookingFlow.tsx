@@ -9,13 +9,42 @@ import { initials, normalizeCoPhone, PHONE_ERROR } from '@/lib/phone'
 import { requestBooking } from './actions'
 
 type Branch = { id: string; name: string; address: string | null }
-type Service = { id: string; name: string; description: string | null; duration_min: number; price: number }
+type Service = { id: string; name: string; description: string | null; duration_min: number; price: number; is_addon: boolean }
 type Barber = { id: string; name: string; branch_ids: string[] }
 type SlotDto = { minutes: number; start: string; label: string; barberIds: string[] }
-type Avail = { date: string; days: { ymd: string; free: number }[]; slots: SlotDto[] }
+type Avail = { date: string; days: { ymd: string; free: number; open?: boolean }[]; slots: SlotDto[] }
 
-const STORE = 'barbar:me'
+const STORE = 'spa:me'
 const short = (n: string) => n.split(' ')[0]
+
+/** Grupo de un servicio en la lista (por el nombre; un catálogo propio sin estas palabras queda todo en "Servicios"). */
+function categoryOf(name: string) {
+  if (/pedi|pies/i.test(name)) return 'Pies'
+  if (/acr[ií]lic|polygel|press|kapping|extensi|gel\b/i.test(name)) return 'Extensiones y refuerzo'
+  if (/mani|manos|u[ñn]as/i.test(name)) return 'Manos'
+  return 'Servicios'
+}
+const CATEGORY_ORDER = ['Manos', 'Pies', 'Extensiones y refuerzo', 'Servicios']
+const catId = (c: string) => 'cat-' + c.toLowerCase().replace(/[^a-z]+/g, '-')
+
+function Welcome({ branch }: { branch: { name: string; address: string | null } | null }) {
+  return (
+    <div className="welcome">
+      <h2>
+        Tus manos, <em>en buenas manos</em>
+      </h2>
+      <p>Elige tus servicios y la hora. Te confirmamos por WhatsApp.</p>
+      {branch && (
+        <div className="meta">
+          <span>
+            <Icon name="pin" /> {branch.name}
+            {branch.address ? ` · ${branch.address}` : ''}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function BookingFlow(props: {
   slug: string
@@ -29,7 +58,7 @@ export function BookingFlow(props: {
   const single = branches.length === 1
   const [step, setStep] = useState(single ? 2 : 1)
   const [branchId, setBranchId] = useState<string | null>(single ? branches[0].id : null)
-  const [serviceId, setServiceId] = useState<string | null>(null)
+  const [serviceIds, setServiceIds] = useState<string[]>([])
   const [date, setDate] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('any')
   const [avail, setAvail] = useState<Avail | null>(null)
@@ -47,11 +76,28 @@ export function BookingFlow(props: {
   const [reload, setReload] = useState(0)
 
   const branch = branches.find((b) => b.id === branchId) ?? null
-  const service = services.find((s) => s.id === serviceId) ?? null
+  // servicios elegidos: primero los principales, después los adicionales (en el orden del catálogo)
+  const chosen = services.filter((s) => serviceIds.includes(s.id))
+  const mains = services.filter((s) => !s.is_addon)
+  const addons = services.filter((s) => s.is_addon)
+  const hasMain = chosen.some((s) => !s.is_addon)
+  const totalMin = chosen.reduce((a, s) => a + s.duration_min, 0)
+  const totalPrice = chosen.reduce((a, s) => a + s.price, 0)
+  const chosenKey = chosen.map((s) => s.id).join(',')
+  const groupedMains = [...mains].sort((a, b) => CATEGORY_ORDER.indexOf(categoryOf(a.name)) - CATEGORY_ORDER.indexOf(categoryOf(b.name)))
+  const showCats = new Set(mains.map((s) => categoryOf(s.name))).size > 1
+  const toggle = (id: string) => {
+    setSlot(null)
+    setServiceIds((cur) => {
+      const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+      // sin servicio principal no quedan adicionales sueltos
+      return next.some((x) => mains.some((m) => m.id === x)) ? next : []
+    })
+  }
   const branchBarbers = useMemo(() => barbers.filter((b) => branchId && b.branch_ids.includes(branchId)), [barbers, branchId])
   const barberName = (id: string) => barbers.find((b) => b.id === id)?.name ?? ''
 
-  // recordar al cliente en este celular
+  // recordar a la clienta en este celular
   useEffect(() => {
     try {
       const me = JSON.parse(localStorage.getItem(STORE) ?? 'null')
@@ -62,11 +108,11 @@ export function BookingFlow(props: {
 
   // disponibilidad
   useEffect(() => {
-    if (!branchId || !serviceId || step < 3) return
+    if (!branchId || !chosenKey || step < 3) return
     let alive = true
     // eslint-disable-next-line react-hooks/set-state-in-effect -- indicador de carga al pedir disponibilidad
     setLoading(true)
-    const q = new URLSearchParams({ branch: branchId, service: serviceId })
+    const q = new URLSearchParams({ branch: branchId, services: chosenKey })
     if (date) q.set('date', date)
     fetch(`/api/r/${slug}/availability?${q}`)
       .then((r) => r.json())
@@ -79,9 +125,9 @@ export function BookingFlow(props: {
     return () => {
       alive = false
     }
-  }, [slug, branchId, serviceId, date, step, reload])
+  }, [slug, branchId, chosenKey, date, step, reload])
 
-  // ¿ya es cliente?
+  // ¿ya es clienta?
   const normPhone = normalizeCoPhone(phone)
   const phoneBad = !normPhone && (phoneTouched || phone.replace(/\D/g, '').length >= 10)
   useEffect(() => {
@@ -126,7 +172,7 @@ export function BookingFlow(props: {
       const r = await requestBooking({
         slug,
         branchId: branchId!,
-        serviceId: serviceId!,
+        serviceIds: chosen.map((s) => s.id),
         start: slot!.start,
         barberId,
         phone,
@@ -177,6 +223,7 @@ export function BookingFlow(props: {
           </div>
         </div>
         {stepsBar()}
+        <Welcome branch={null} />
         <div className="eyebrow">Paso 1 de {steps} · Elige la sede</div>
         <div className="stack" role="group" aria-label="Sede">
           {branches.map((b) => (
@@ -222,36 +269,95 @@ export function BookingFlow(props: {
           <div className="top">
             {backBtn(1)}
             <div className="tt">
-              <h1>Servicio</h1>
+              <h1>Servicios</h1>
               <div className="sub">Sede {branch?.name}</div>
             </div>
           </div>
         )}
         {stepsBar()}
+        {single && <Welcome branch={branch} />}
         <div className="eyebrow">
           Paso {stepNo} de {steps} · ¿Qué te vas a hacer?
         </div>
-        <div className="stack" role="group" aria-label="Servicio">
-          {services.map((s) => (
-            <button
-              key={s.id}
-              className={'opt' + (s.id === serviceId ? ' on' : '')}
-              onClick={() => {
-                if (s.id !== serviceId) setSlot(null)
-                setServiceId(s.id)
-                setStep(3)
-              }}
-            >
-              <span className="grow">
-                <div className="t">{s.name}</div>
-                <div className="d">
-                  {fmtDuration(s.duration_min)}
-                  {s.description ? ` · ${s.description}` : ''}
+        <p className="small muted" style={{ margin: '-4px 2px 10px' }}>
+          Puedes elegir varios, por ejemplo manos y pies en la misma cita.
+        </p>
+        {showCats && (
+          <nav className="chips cat-jump" aria-label="Ir a la categoría" style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)', padding: '8px 0', margin: '0 0 4px' }}>
+            {CATEGORY_ORDER.filter((c) => mains.some((s) => categoryOf(s.name) === c)).map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="chip"
+                onClick={() => document.getElementById(catId(c))?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >
+                {c === 'Extensiones y refuerzo' ? 'Extensiones' : c}
+              </button>
+            ))}
+          </nav>
+        )}
+        <div className="stack" role="group" aria-label="Servicios">
+          {groupedMains.map((s, i) => {
+            const on = serviceIds.includes(s.id)
+            const cat = categoryOf(s.name)
+            const heading = showCats && (i === 0 || categoryOf(groupedMains[i - 1].name) !== cat)
+            return (
+              <div key={s.id} className="stack" style={{ gap: 0 }}>
+              {heading && (
+                <div className="svc-cat" id={catId(cat)} style={{ scrollMarginTop: 64, ...(i === 0 ? { marginTop: 4 } : {}) }}>
+                  {cat}
                 </div>
+              )}
+              <button className={'opt multi svc' + (on ? ' on' : '')} aria-pressed={on} onClick={() => toggle(s.id)}>
+                <span className="grow">
+                  <span className="t">{s.name}</span>
+                  {s.description && <span className="d">{s.description}</span>}
+                  <span className="svc-meta">
+                    <span className="dur">
+                      <Icon name="clock" /> {fmtDuration(s.duration_min)}
+                    </span>
+                  </span>
+                </span>
+                <span className="price">{fmtMoney(s.price)}</span>
+              </button>
+              </div>
+            )
+          })}
+        </div>
+        {hasMain && addons.length > 0 && (
+          <>
+            <div className="svc-cat">Adicionales (opcional)</div>
+            <div className="stack" role="group" aria-label="Adicionales">
+              {addons.map((s) => {
+                const on = serviceIds.includes(s.id)
+                return (
+                  <button key={s.id} className={'opt multi addon svc' + (on ? ' on' : '')} aria-pressed={on} onClick={() => toggle(s.id)}>
+                    <span className="grow">
+                      <span className="t">{s.name}</span>
+                      <span className="d">
+                        +{fmtDuration(s.duration_min)}
+                        {s.description ? ` · ${s.description}` : ''}
+                      </span>
+                    </span>
+                    <span className="price">+{fmtMoney(s.price)}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+        <div className="cta">
+          {hasMain && (
+            <div className="total-bar" aria-live="polite">
+              <span>
+                {chosen.length === 1 ? '1 servicio' : `${chosen.length} servicios`} · {fmtDuration(totalMin)}
               </span>
-              <span className="price">{fmtMoney(s.price)}</span>
-            </button>
-          ))}
+              <b>{fmtMoney(totalPrice)}</b>
+            </div>
+          )}
+          <button className="btn" disabled={!hasMain} onClick={() => setStep(3)}>
+            Continuar
+          </button>
         </div>
       </main>
     )
@@ -264,7 +370,7 @@ export function BookingFlow(props: {
           <div className="tt">
             <h1>Día y hora</h1>
             <div className="sub">
-              {service?.name} · {service && fmtDuration(service.duration_min)}
+              {chosen.map((s) => s.name).join(' + ')} · {fmtDuration(totalMin)}
               {!single && ` · ${branch?.name}`}
             </div>
           </div>
@@ -289,7 +395,7 @@ export function BookingFlow(props: {
               >
                 <small>{f.wd}</small>
                 <b>{f.day}</b>
-                <em>{d.free ? f.mo : 'lleno'}</em>
+                <em>{d.free ? f.mo : d.open === false ? 'cerrado' : 'lleno'}</em>
               </button>
             )
           })}
@@ -298,24 +404,33 @@ export function BookingFlow(props: {
         {branchBarbers.length > 1 && (
           <>
             <div className="eyebrow">¿Con quién?</div>
-            <div className="bfilter" role="group" aria-label="Barbero">
+            <div className="bfilter" role="group" aria-label="Manicurista">
               <button className={'bchip' + (filter === 'any' ? ' on' : '')} onClick={() => { setFilter('any'); setSlot(null) }}>
                 <span className="av any">
                   <Icon name="users" />
                 </span>
                 <span>
-                  Cualquiera<small>El primero libre</small>
+                  Cualquiera<small>La primera libre</small>
                 </span>
               </button>
-              {branchBarbers.map((b) => (
-                <button key={b.id} className={'bchip' + (filter === b.id ? ' on' : '')} onClick={() => { setFilter(b.id); setSlot(null) }}>
-                  <span className="av">{initials(b.name)}</span>
-                  <span>
-                    {short(b.name)}
-                    <small>{(avail?.slots ?? []).filter((s) => s.barberIds.includes(b.id)).length} libres</small>
-                  </span>
-                </button>
-              ))}
+              {branchBarbers.map((b) => {
+                const n = (avail?.slots ?? []).filter((s) => s.barberIds.includes(b.id)).length
+                const none = !loading && n === 0
+                return (
+                  <button
+                    key={b.id}
+                    className={'bchip' + (filter === b.id ? ' on' : '') + (none ? ' none' : '')}
+                    style={none && filter !== b.id ? { opacity: 0.55 } : undefined}
+                    onClick={() => { setFilter(b.id); setSlot(null) }}
+                  >
+                    <span className="av">{initials(b.name)}</span>
+                    <span>
+                      {short(b.name)}
+                      <small>{loading ? '…' : n === 0 ? 'Sin horas este día' : n === 1 ? '1 hora libre' : `${n} horas libres`}</small>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </>
         )}
@@ -327,7 +442,7 @@ export function BookingFlow(props: {
           <span className="small muted">{loading ? 'Cargando…' : `${slots.length} disponibles`}</span>
         </div>
         <div className="tslots" aria-live="polite">
-          {!loading && !slots.length && <div className="empty">No hay horas libres este día. Prueba otro día{filter !== 'any' ? ' u otro barbero' : ''}.</div>}
+          {!loading && !slots.length && <div className="empty">No hay horas libres este día. Prueba otro día{filter !== 'any' ? ' u otra manicurista' : ''}.</div>}
           {groups.map((g) => (
             <div key={g.label} className="stack" style={{ gap: 8 }}>
               <div className="tgroup">{g.label}</div>
@@ -339,7 +454,7 @@ export function BookingFlow(props: {
                     <button className={'tslot' + (on ? ' on' : '')} aria-pressed={on} onClick={() => chooseSlot(s)}>
                       <span className="tm">{s.label}</span>
                       <span className="who">
-                        {ids.length === 1 ? short(barberName(ids[0])) : `${ids.length} barberos libres`}
+                        {ids.length === 1 ? short(barberName(ids[0])) : `${ids.length} manicuristas libres`}
                       </span>
                       <span className="avs">
                         {ids.slice(0, 3).map((id) => (
@@ -420,7 +535,7 @@ export function BookingFlow(props: {
           )}
         </div>
         {known ? (
-          <div className="card row" style={{ borderColor: 'rgba(115,176,131,.4)', background: 'var(--ok-soft)' }}>
+          <div className="card row" style={{ borderColor: 'var(--ok-line)', background: 'var(--ok-soft)' }}>
             <Icon name="check" style={{ color: 'var(--ok)' }} />
             <div className="grow">
               <b>¡Hola de nuevo, {known}!</b>
@@ -439,7 +554,7 @@ export function BookingFlow(props: {
           </div>
         )}
         <div className="field">
-          <label htmlFor="nota">Nota para el barbero (opcional)</label>
+          <label htmlFor="nota">Nota para la manicurista (opcional)</label>
           <div className="in">
             <input id="nota" placeholder="Ej.: igual que la última vez" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
@@ -453,17 +568,26 @@ export function BookingFlow(props: {
             <dd>{branch?.name}</dd>
           </>
         )}
-        <dt>Servicio</dt>
-        <dd>{service?.name}</dd>
-        <dt>Barbero</dt>
-        <dd>{barberId ? barberName(barberId) : 'El primero libre'}</dd>
+        <dt>{chosen.length > 1 ? 'Servicios' : 'Servicio'}</dt>
+        <dd>
+          {chosen.map((s) => (
+            <div key={s.id}>
+              {s.is_addon ? '+ ' : ''}
+              {s.name} · {fmtMoney(s.price)}
+            </div>
+          ))}
+        </dd>
+        <dt>Duración</dt>
+        <dd>{fmtDuration(totalMin)}</dd>
+        <dt>Manicurista</dt>
+        <dd>{barberId ? barberName(barberId) : 'La primera libre'}</dd>
         <dt>Fecha</dt>
         <dd>
           {date && `${fmtYmdShort(date).wd} ${fmtYmdShort(date).day} ${fmtYmdShort(date).mo}`} · {slot?.label}
         </dd>
         <dt>Total</dt>
         <dd className="num" style={{ color: 'var(--brass)' }}>
-          {service && fmtMoney(service.price)} · pagas en la barbería
+          {fmtMoney(totalPrice)} · pagas en el spa
         </dd>
       </dl>
       {error && (
@@ -472,7 +596,7 @@ export function BookingFlow(props: {
         </div>
       )}
       <p className="small muted" style={{ margin: '14px 2px 0' }}>
-        Al solicitar aceptas el tratamiento de tus datos según la política de privacidad de la barbería.
+        Al solicitar aceptas el tratamiento de tus datos según la política de privacidad del spa.
       </p>
       <div className="cta">
         <button className="btn" disabled={pending || !when} onClick={submit}>

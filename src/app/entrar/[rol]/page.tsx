@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { PhoneInput } from '@/components/PhoneInput'
 import { Icon } from '@/components/Icon'
+import { ShopMark } from '@/components/ShopLogo'
 import { Flash } from '@/components/ui'
 import { currentUser, LOCK_MINUTES, login } from '@/lib/auth'
 import { normalizeLoginPhone, PHONE_ERROR } from '@/lib/phone'
@@ -11,7 +12,7 @@ import { isStaffRole, STAFF_ROLES } from '../roles'
 async function doLogin(fd: FormData) {
   'use server'
   const rol = String(fd.get('rol') ?? '')
-  const back = `/entrar/${isStaffRole(rol) ? rol : 'barbero'}`
+  const back = `/entrar/${isStaffRole(rol) ? rol : 'manicurista'}`
   const phone = String(fd.get('phone') ?? '')
   if (!normalizeLoginPhone(phone)) redirect(`${back}?err=phone`)
   const r = await login(phone, String(fd.get('pin') ?? ''), rol === 'dueno' ? 'owner' : 'barber')
@@ -25,6 +26,8 @@ export async function generateMetadata({ params }: PageProps<'/entrar/[rol]'>) {
 
 export default async function EntrarRol({ params, searchParams }: PageProps<'/entrar/[rol]'>) {
   const { rol } = await params
+  // link de antes para el equipo (/entrar/barbero)
+  if (rol === 'barbero') redirect('/entrar/manicurista')
   if (!isStaffRole(rol)) notFound()
   if (await currentUser()) redirect('/app')
   const { err } = await searchParams
@@ -37,7 +40,8 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
           <Icon name="back" />
         </Link>
       </div>
-      <div style={{ display: 'grid', placeItems: 'center', margin: '8px 0 10px' }}>
+      <div style={{ display: 'grid', placeItems: 'center', gap: 12, margin: '8px 0 10px' }}>
+        <ShopMark size={44} />
         <span className="role-badge">
           <Icon name={r.icon} />
         </span>
@@ -65,7 +69,7 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
             err === 'phone'
               ? PHONE_ERROR
               : err === 'locked'
-                ? `Demasiados intentos con ese celular. Espera ${LOCK_MINUTES} minutos o pídele al dueño que revise tu PIN.`
+                ? `Demasiados intentos con ese celular. Espera ${LOCK_MINUTES} minutos o pídele a la administración del spa que revise tu PIN.`
                 : err
                   ? 'Celular o PIN incorrecto'
                   : undefined
@@ -74,15 +78,15 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
         <button className="btn" type="submit">
           Entrar como {r.short}
         </button>
-        {rol === 'barbero' && <p className="small muted">¿Olvidaste tu PIN? Pídele al dueño de la barbería que te asigne uno nuevo.</p>}
+        {rol === 'manicurista' && <p className="small muted">¿Olvidaste tu PIN? Pídele a la administración del spa que te asigne uno nuevo.</p>}
         <p className="small muted">
           {rol === 'dueno' ? (
             <>
-              ¿Eres barbero? <Link className="link" href="/entrar/barbero">Entra como barbero</Link>
+              ¿Eres manicurista? <Link className="link" href="/entrar/manicurista">Entra como manicurista</Link>
             </>
           ) : (
             <>
-              ¿Eres el dueño? <Link className="link" href="/entrar/dueno">Entra como dueño</Link>
+              ¿Eres la dueña? <Link className="link" href="/entrar/dueno">Entra como dueña o administradora</Link>
             </>
           )}
         </p>
@@ -93,12 +97,12 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
           <div className="eyebrow">Usuarios de prueba</div>
           <div className="card">
             <div className="kv">
-              <span>{rol === 'dueno' ? DEMO.owner.name : 'Todos los barberos'}</span>
+              <span>{rol === 'dueno' ? DEMO.owner.name : 'Todas las manicuristas'}</span>
               <span className="num">
                 {DEMO.login.phone} · PIN {DEMO.login.pin}
               </span>
             </div>
-            {rol === 'barbero' && <p className="small muted" style={{ margin: '6px 0 0' }}>Después eliges con cuál barbero entrar.</p>}
+            {rol === 'manicurista' && <p className="small muted" style={{ margin: '6px 0 0' }}>Después eliges con cuál manicurista entrar.</p>}
           </div>
         </>
       )}

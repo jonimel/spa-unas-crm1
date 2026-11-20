@@ -28,7 +28,7 @@ describe('entrar', () => {
     expect(await login('30', DEMO.owner.pin)).toBe('bad')
   })
 
-  it('la entrada común de la demo (1111 / 1111) abre al dueño, y por "Barbero" pide elegir', async () => {
+  it('la entrada común de la demo (1111 / 1111) abre al dueño, y por "Manicurista" pide elegir', async () => {
     expect(await login(DEMO.login.phone, DEMO.login.pin, 'owner')).toBe('ok')
     expect(await login(DEMO.login.phone, DEMO.login.pin, 'barber')).toBe('pick')
     expect(await login(DEMO.login.phone, '1234', 'owner')).toBe('bad')

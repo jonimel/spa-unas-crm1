@@ -7,8 +7,8 @@ import { STAFF_ROLES } from './roles'
 
 export const metadata = { title: 'Entrar · Equipo' }
 
-// Entrada del equipo: primero se elige quién eres (dueño o barbero) y después celular + PIN.
-// Los clientes no entran aquí: reservan desde el link de su barbería (/r/...) o desde /reservar.
+// Entrada del equipo: primero se elige quién eres (dueña o manicurista) y después celular + PIN.
+// Las clientas no entran aquí: reservan desde el link de su spa (/r/...) o desde /reservar.
 export default async function Entrar() {
   if (await currentUser()) redirect('/app')
   return (
@@ -20,7 +20,7 @@ export default async function Entrar() {
         Entrar
       </h2>
       <p className="muted small" style={{ textAlign: 'center', margin: '-4px 0 6px' }}>
-        Solo para el equipo de la barbería. ¿Quién eres?
+        Solo para el equipo del spa. ¿Quién eres?
       </p>
 
       <div className="stack" style={{ marginTop: 14 }}>
@@ -43,7 +43,7 @@ export default async function Entrar() {
           <Icon name="cal" style={{ color: 'var(--brass)' }} />
           <div className="grow small">
             <b>¿Quieres reservar una cita?</b>
-            <div className="muted">Los clientes no necesitan cuenta.</div>
+            <div className="muted">Las clientas no necesitan cuenta.</div>
           </div>
           <Link className="link small" href="/reservar" style={{ display: 'grid', placeItems: 'center' }}>
             Reservar
@@ -52,7 +52,7 @@ export default async function Entrar() {
       </div>
 
       <p className="small muted" style={{ marginTop: 18 }}>
-        ¿Tienes una barbería y todavía no usas Barbar? <Link className="link" href="/registro">Regístrala aquí</Link>
+        ¿Tienes un spa y todavía no usas Spa Uñas CRM? <Link className="link" href="/registro">Regístralo aquí</Link>
       </p>
     </main>
   )

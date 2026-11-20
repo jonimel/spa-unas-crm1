@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isUuid } from '@/lib/validate'
 import { notFound } from 'next/navigation'
 import { Icon } from '@/components/Icon'
 import { Flash, METHOD_LABEL, Top } from '@/components/ui'
@@ -10,13 +11,13 @@ import { period } from '@/lib/periods'
 import { fmtDayShort as dayLabel, fmtMoney, plural, todayYmd } from '@/lib/time'
 import { recordPayout, saveBarberScheme, voidPayout } from '../../actions'
 
-const UUID = /^[0-9a-f-]{36}$/i
+const UUID = { test: isUuid }
 const METHOD_ICON: Record<string, string> = { efectivo: 'cash', nequi: 'phone', daviplata: 'phone', transferencia: 'link' }
 const UNIT: Record<string, string> = { daily: 'diario', weekly: 'semanal', monthly: 'mensual' }
 
 const plain = (n: number) => Math.round(n).toLocaleString('es-CO').replace(/,/g, '.')
 
-export default async function Barbero({ params, searchParams }: PageProps<'/app/comisiones/[id]'>) {
+export default async function Manicurista({ params, searchParams }: PageProps<'/app/comisiones/[id]'>) {
   const user = await requireUser('owner')
   const { id } = await params
   const sp = await searchParams
@@ -203,14 +204,17 @@ function Move({ m, barberId }: { m: PayoutRow; barberId: string }) {
 // ---------------- esquema de pago ----------------
 
 async function SchemeEditor({ tenantId, tz, id, scheme, shop }: { tenantId: string; tz: string; id: string; scheme: Scheme; shop: Awaited<ReturnType<typeof shopRules>> }) {
-  const services = await rows<{ id: string; name: string; price: number }>('select id, name, price from services where tenant_id = $1 and active order by sort, name', [tenantId])
+  const services = await rows<{ id: string; name: string; price: number }>('select id, name, price from services where tenant_id = $1 and active order by is_addon, sort, name', [tenantId])
   // simulación: los cobros de esta semana recalculados con el esquema guardado
   const wk = period('semana', tz)
-  const pays = await rows<{ amount: number; tip: number; method: string; service_id: string | null }>(
-    `select amount, tip, method::text, service_id from payments where barber_id = $1 and paid_at >= $2 and paid_at < $3`,
+  const pays = await rows<{ amount: number; tip: number; method: string; service_id: string | null; lines: { serviceId: string | null; price: number }[] | null }>(
+    `select p.amount, p.tip, p.method::text, p.service_id,
+            (select json_agg(json_build_object('serviceId', x.service_id, 'price', x.price) order by x.sort) from appointment_services x where x.appointment_id = p.appointment_id) lines
+       from payments p where p.barber_id = $1 and p.paid_at >= $2 and p.paid_at < $3`,
     [id, wk.start, wk.end],
   )
-  const sim = pays.reduce((s, p) => s + computeShare({ amount: p.amount, tip: p.tip, method: p.method, serviceId: p.service_id }, scheme, shop).barberShare, 0)
+  // con varios servicios en la cita, la regla de cada servicio se aplica a su parte
+  const sim = pays.reduce((s, p) => s + computeShare({ amount: p.amount, tip: p.tip, method: p.method, serviceId: p.service_id, lines: p.lines ?? undefined }, scheme, shop).barberShare, 0)
   const simSales = pays.reduce((s, p) => s + p.amount, 0)
 
   return (
@@ -228,7 +232,7 @@ async function SchemeEditor({ tenantId, tz, id, scheme, shop }: { tenantId: stri
         </label>
         <label>
           <input type="radio" name="model" value="rent" defaultChecked={scheme.model === 'rent'} />
-          Arriendo silla
+          Arriendo puesto
         </label>
       </div>
 
@@ -261,7 +265,7 @@ async function SchemeEditor({ tenantId, tz, id, scheme, shop }: { tenantId: stri
           Déjalo en “General” para usar el porcentaje de arriba.
         </p>
         <p className="small muted only-fixed" style={{ margin: '0 2px 8px' }}>
-          Cuánto gana el barbero por cada servicio. Si un servicio queda sin monto, se usa el porcentaje general.
+          Cuánto gana la manicurista por cada servicio. Si un servicio queda sin monto, se usa el porcentaje general.
         </p>
         <div className="stack">
           {services.map((s) => {
@@ -285,7 +289,7 @@ async function SchemeEditor({ tenantId, tz, id, scheme, shop }: { tenantId: stri
       </div>
 
       <div className="panel-rent">
-        <div className="eyebrow">Arriendo de silla</div>
+        <div className="eyebrow">Arriendo de puesto</div>
         <label className="big-in" htmlFor="rent">
           <b>$</b>
           <input id="rent" name="rentAmount" inputMode="numeric" data-money="" defaultValue={scheme.rentAmount ? plain(scheme.rentAmount) : ''} placeholder="350.000" className="big-num" aria-label="Valor del arriendo" />
@@ -305,7 +309,7 @@ async function SchemeEditor({ tenantId, tz, id, scheme, shop }: { tenantId: stri
           ))}
         </div>
         <div className="note" style={{ marginTop: 12 }}>
-          El barbero se queda con el 100% de lo que cobra y paga el arriendo a la barbería. El arriendo se cuenta por periodo empezado, desde el día en que pasa a
+          La manicurista se queda con el 100% de lo que cobra y paga el arriendo al spa. El arriendo se cuenta por periodo empezado, desde el día en que pasa a
           arriendo.
         </div>
       </div>
@@ -313,7 +317,7 @@ async function SchemeEditor({ tenantId, tz, id, scheme, shop }: { tenantId: stri
       <div className="eyebrow">Simulación · esta semana</div>
       <div className="card row">
         <div className="grow small muted">
-          {plural(pays.length, 'servicio', 'servicios')} · {fmtMoney(simSales)} en ventas
+          {plural(pays.length, 'visita', 'visitas')} · {fmtMoney(simSales)} en ventas
         </div>
         <b className="num" style={{ color: 'var(--brass)' }}>
           {scheme.model === 'rent' ? fmtMoney(simSales) : fmtMoney(sim)}

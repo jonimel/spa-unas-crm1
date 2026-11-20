@@ -4,14 +4,18 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { logout, requireUser } from '@/lib/auth'
 import { AlreadyPaid, approve, cancel, checkout, markNoShow, reject, PAY_METHODS, type PayMethod } from '@/lib/appointments'
-import { BookingError, createAppointment, tenantById } from '@/lib/booking'
+import { BOOKABLE, BookingError, createAppointment, tenantById } from '@/lib/booking'
 import { one, rows, tx } from '@/lib/db'
 import { hashPin } from '@/lib/pin'
 import { normalizeCoPhone, PHONE_ERROR } from '@/lib/phone'
 import { PAYOUT_METHODS } from '@/lib/commission'
 import { atLocal, isYmd, localParts, todayYmd } from '@/lib/time'
+import { uuidOrNull } from '@/lib/validate'
+import { z } from 'zod'
 
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? '').trim()
+/** Un id del formulario: el valor si es un uuid válido, '' si viene vacío o alterado. */
+const uid = (fd: FormData, k: string) => uuidOrNull(s(fd, k)) ?? ''
 
 function back(to: string, msg: { ok?: string; err?: string }): never {
   const u = new URL(to, 'http://x')
@@ -36,7 +40,7 @@ export async function approveAction(fd: FormData) {
   const to = s(fd, 'back') || '/app/agenda'
   await guard(to, () => approve(user, s(fd, 'id')))
   revalidatePath('/app', 'layout')
-  back(to, { ok: 'Cita confirmada. Le avisamos al cliente por WhatsApp.' })
+  back(to, { ok: 'Cita confirmada. Le avisamos a la clienta por WhatsApp.' })
 }
 
 export async function rejectAction(fd: FormData) {
@@ -44,7 +48,7 @@ export async function rejectAction(fd: FormData) {
   const to = s(fd, 'back') || '/app/agenda'
   await guard(to, () => reject(user, s(fd, 'id'), s(fd, 'reason') || undefined))
   revalidatePath('/app', 'layout')
-  back(to, { ok: 'Solicitud rechazada. El cliente recibió el link para elegir otra hora.' })
+  back(to, { ok: 'Solicitud rechazada. La clienta recibió el link para elegir otra hora.' })
 }
 
 export async function cancelAction(fd: FormData) {
@@ -52,7 +56,7 @@ export async function cancelAction(fd: FormData) {
   const id = s(fd, 'id')
   await guard(`/app/cita/${id}`, () => cancel(user, id, s(fd, 'reason') || undefined))
   revalidatePath('/app', 'layout')
-  back(`/app/cita/${id}`, { ok: 'Cita cancelada. Le avisamos al cliente.' })
+  back(`/app/cita/${id}`, { ok: 'Cita cancelada. Le avisamos a la clienta.' })
 }
 
 export async function noShowAction(fd: FormData) {
@@ -75,26 +79,33 @@ export async function checkoutAction(fd: FormData) {
   back('/app/agenda', { ok: 'Visita cobrada ✓' })
 }
 
-/** Cliente de paso o cita agendada por el barbero/dueño (queda confirmada de una). */
+/** Clienta de paso o cita agendada por la manicurista/dueño (queda confirmada de una). */
 export async function newAppointmentAction(fd: FormData) {
   const user = await requireUser()
   const t = (await tenantById(user.tenant_id))!
   const to = '/app/nueva'
-  const barberId = user.role === 'owner' ? s(fd, 'barber') : user.id
+  const barberId = user.role === 'owner' ? uid(fd, 'barber') : user.id
+  if (!barberId) back(to, { err: 'Elige la manicurista' })
+  const who = await one(`select 1 from users u where u.id = $1 and u.tenant_id = $2 and u.active and ${BOOKABLE}`, [barberId, user.tenant_id])
+  if (!who) back(to, { err: 'Manicurista no disponible' })
+  // la sede: la que se eligió (si trabaja allí) o la suya
+  const asked = uid(fd, 'branch')
   const branch = await one<{ branch_id: string }>(
-    `select w.branch_id from working_hours w where w.barber_id = $1 order by (w.branch_id = (select branch_id from users where id = $1)) desc limit 1`,
-    [barberId],
+    `select w.branch_id from working_hours w join branches b on b.id = w.branch_id and b.active
+      where w.barber_id = $1 and w.tenant_id = $2 ${asked ? 'and w.branch_id = $3' : ''}
+      order by (w.branch_id = (select branch_id from users where id = $1)) desc limit 1`,
+    asked ? [barberId, user.tenant_id, asked] : [barberId, user.tenant_id],
   )
-  const branchId = s(fd, 'branch') || branch?.branch_id
-  if (!branchId) back(to, { err: 'El barbero no tiene horario en ninguna sede' })
+  const branchId = branch?.branch_id
+  if (!branchId) back(to, { err: asked ? 'La manicurista no trabaja en esa sede' : 'La manicurista no tiene horario en ninguna sede' })
   const rawPhone = s(fd, 'phone')
   const phone = rawPhone ? normalizeCoPhone(rawPhone) : null
   if (rawPhone && !phone) back(to, { err: PHONE_ERROR })
-  const name = s(fd, 'name') || (phone ? '' : 'Cliente de paso')
+  const name = s(fd, 'name') || (phone ? '' : 'Clienta de paso')
   let clientName = name
   if (!clientName && phone) {
     const c = await one<{ name: string }>('select name from clients where tenant_id = $1 and phone = $2', [t.id, phone])
-    clientName = c?.name ?? 'Cliente'
+    clientName = c?.name ?? 'Clienta'
   }
   let start: Date
   if (s(fd, 'when') === 'now') {
@@ -102,15 +113,17 @@ export async function newAppointmentAction(fd: FormData) {
     start.setSeconds(0, 0)
   } else {
     const ymd = s(fd, 'date')
-    const [h, m] = s(fd, 'time').split(':').map(Number)
-    if (!isYmd(ymd) || !Number.isFinite(h)) back(to, { err: 'Elige día y hora' })
-    start = atLocal(ymd, h * 60 + (m || 0), t.timezone)
+    const hm = /^(\d{1,2}):(\d{2})$/.exec(s(fd, 'time'))
+    if (!isYmd(ymd) || !hm || Number(hm[1]) > 23 || Number(hm[2]) > 59) back(to, { err: 'Elige día y hora' })
+    start = atLocal(ymd, Number(hm![1]) * 60 + Number(hm![2]), t.timezone)
+    // una cita agendada no puede quedar en el pasado (para lo que ya pasó está "Ahora (de paso)")
+    if (start.getTime() < Date.now() - 15 * 60_000) back(to, { err: 'Esa hora ya pasó. Elige una hora que venga, o “Ahora (de paso)”.' })
   }
   const id = await guard(to, () =>
     createAppointment({
       tenantId: t.id,
       branchId: branchId!,
-      serviceId: s(fd, 'service'),
+      serviceIds: fd.getAll('service').map((v) => String(v)),
       start,
       barberId,
       clientName,
@@ -121,46 +134,98 @@ export async function newAppointmentAction(fd: FormData) {
     }),
   )
   revalidatePath('/app', 'layout')
-  if (s(fd, 'when') === 'now') redirect(`/app/cobrar/${id}?ok=${encodeURIComponent('Cliente de paso registrado. Cobra cuando termines.')}`)
+  if (s(fd, 'when') === 'now') redirect(`/app/cobrar/${id}?ok=${encodeURIComponent('Clienta de paso registrada. Cobra cuando termines.')}`)
   back(`/app/agenda?date=${localParts(start, t.timezone).ymd}`, { ok: 'Cita agendada' })
 }
 
 // ---------------- clientes ----------------
 
+/** Ficha de la clienta: notas, colores favoritos y alergias (el equipo las ve en la agenda y la cita). */
 export async function saveClientNotes(fd: FormData) {
   const user = await requireUser()
-  const id = s(fd, 'id')
-  await one('update clients set notes = $3 where id = $1 and tenant_id = $2', [id, user.tenant_id, s(fd, 'notes').slice(0, 2000) || null])
-  back(`/app/clientes/${id}`, { ok: 'Notas guardadas' })
+  const id = uid(fd, 'id')
+  if (!id) back('/app/clientes', { err: 'Clienta no encontrada' })
+  await one('update clients set notes = $3, favorite_colors = $4, allergies = $5 where id = $1 and tenant_id = $2', [
+    id,
+    user.tenant_id,
+    s(fd, 'notes').slice(0, 2000) || null,
+    s(fd, 'favorite_colors').slice(0, 300) || null,
+    s(fd, 'allergies').slice(0, 300) || null,
+  ])
+  revalidatePath('/app', 'layout')
+  back(`/app/clientes/${id}`, { ok: 'Ficha guardada' })
 }
 
 export async function readAlert(fd: FormData) {
   const user = await requireUser()
-  await one('update alerts set read_at = now() where id = $1 and user_id = $2', [s(fd, 'id'), user.id])
+  const id = uid(fd, 'id')
+  if (id) await one('update alerts set read_at = now() where id = $1 and user_id = $2', [id, user.id])
   revalidatePath('/app', 'layout')
   back('/app/agenda', {})
 }
 
 // ---------------- ajustes (solo dueño) ----------------
 
+const ServiceForm = z.object({
+  id: z.union([z.literal(''), z.string().uuid()]),
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(300),
+  duration: z.coerce.number().int().min(5).max(600),
+  price: z.coerce.number().int().min(0).max(10_000_000),
+  refill: z.union([z.literal(''), z.coerce.number().int().min(1).max(365)]),
+})
+
 export async function saveService(fd: FormData) {
   const user = await requireUser('owner')
-  const id = s(fd, 'id')
-  const name = s(fd, 'name')
-  const dur = Number(s(fd, 'duration'))
-  const price = Number(s(fd, 'price').replace(/\D/g, ''))
-  if (!name || !(dur > 0) || !(price >= 0)) back('/app/ajustes', { err: 'Revisa nombre, duración y precio' })
+  const parsed = ServiceForm.safeParse({
+    id: s(fd, 'id'),
+    name: s(fd, 'name'),
+    description: s(fd, 'description'),
+    duration: s(fd, 'duration'),
+    price: s(fd, 'price').replace(/\D/g, '') || 'x',
+    refill: s(fd, 'refill_days'),
+  })
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0]
+    back('/app/ajustes', {
+      err:
+        field === 'refill'
+          ? 'Los días para el retoque van de 1 a 365'
+          : field === 'duration'
+            ? 'La duración va en minutos enteros (de 5 a 600)'
+            : field === 'id'
+              ? 'Servicio no encontrado'
+              : 'Revisa nombre, duración y precio',
+    })
+  }
+  const { id, name, description, duration: dur, price, refill: refillRaw } = parsed.data!
+  const refill = refillRaw === '' ? null : refillRaw
   const active = fd.get('active') === 'on'
+  const addon = fd.get('is_addon') === 'on'
   if (id)
-    await one(`update services set name=$3, description=$4, duration_min=$5, price=$6, active=$7 where id=$1 and tenant_id=$2`, [id, user.tenant_id, name, s(fd, 'description') || null, dur, price, active])
+    await one(`update services set name=$3, description=$4, duration_min=$5, price=$6, active=$7, is_addon=$8, refill_days=$9 where id=$1 and tenant_id=$2`, [
+      id,
+      user.tenant_id,
+      name,
+      description || null,
+      dur,
+      price,
+      active,
+      addon,
+      refill,
+    ])
   else
-    await one(`insert into services (tenant_id, name, description, duration_min, price, sort) values ($1,$2,$3,$4,$5,(select coalesce(max(sort),0)+1 from services where tenant_id=$1))`, [user.tenant_id, name, s(fd, 'description') || null, dur, price])
+    await one(
+      `insert into services (tenant_id, name, description, duration_min, price, is_addon, refill_days, sort) values ($1,$2,$3,$4,$5,$6,$7,(select coalesce(max(sort),0)+1 from services where tenant_id=$1))`,
+      [user.tenant_id, name, description || null, dur, price, addon, refill],
+    )
   back('/app/ajustes', { ok: 'Servicio guardado' })
 }
 
 export async function saveBranch(fd: FormData) {
   const user = await requireUser('owner')
-  const id = s(fd, 'id')
+  const id = uid(fd, 'id')
+  if (s(fd, 'id') && !id) back('/app/ajustes', { err: 'Sede no encontrada' })
   const name = s(fd, 'name')
   if (!name) back('/app/ajustes', { err: 'La sede necesita nombre' })
   if (id) await one(`update branches set name=$3, address=$4 where id=$1 and tenant_id=$2`, [id, user.tenant_id, name, s(fd, 'address') || null])
@@ -171,7 +236,8 @@ export async function saveBranch(fd: FormData) {
 /** Cerrar una sede: deja de aparecer en reservas, agenda y ajustes, pero su historial queda en los reportes. */
 export async function closeBranch(fd: FormData) {
   const user = await requireUser('owner')
-  const id = s(fd, 'id')
+  const id = uid(fd, 'id')
+  if (!id) back('/app/ajustes', { err: 'Sede no encontrada' })
   const b = await one<{ name: string }>('select name from branches where id = $1 and tenant_id = $2 and active', [id, user.tenant_id])
   if (!b) back('/app/ajustes', { err: 'Sede no encontrada' })
   const open = await one<{ n: number }>('select count(*)::int n from branches where tenant_id = $1 and active', [user.tenant_id])
@@ -194,42 +260,56 @@ export async function closeBranch(fd: FormData) {
 
 export async function reopenBranch(fd: FormData) {
   const user = await requireUser('owner')
-  await one('update branches set active = true where id = $1 and tenant_id = $2', [s(fd, 'id'), user.tenant_id])
+  const id = uid(fd, 'id')
+  if (id) await one('update branches set active = true where id = $1 and tenant_id = $2', [id, user.tenant_id])
   revalidatePath('/', 'layout')
   back('/app/ajustes', { ok: 'Sede abierta de nuevo' })
 }
 
 export async function saveBarber(fd: FormData) {
   const user = await requireUser('owner')
-  const id = s(fd, 'id')
+  const rawId = s(fd, 'id')
+  const id = uid(fd, 'id')
+  if (rawId && !id) back('/app/ajustes', { err: 'Manicurista no encontrada' })
+  // solo alguien de este spa: una manicurista, o la dueña misma (su horario de "Yo también atiendo")
+  const saved = id
+    ? await one<{ phone: string; role: string }>(`select phone, role from users where id = $1 and tenant_id = $2 and (role = 'barber' or id = $3)`, [id, user.tenant_id, user.id])
+    : null
+  if (id && !saved) back('/app/ajustes', { err: 'Manicurista no encontrada' })
+  const self = !!id && id === user.id
   const name = s(fd, 'name')
   const typed = s(fd, 'phone').replace(/\D/g, '')
-  const saved = id ? await one<{ phone: string }>('select phone from users where id = $1 and tenant_id = $2', [id, user.tenant_id]) : null
   const phone = normalizeCoPhone(s(fd, 'phone')) ?? (saved?.phone === typed ? typed : null)
-  const pin = s(fd, 'pin')
-  const branchId = s(fd, 'branch') || null
-  const to = id ? `/app/ajustes/barbero/${id}` : '/app/ajustes/barbero/nuevo'
+  const pin = self ? '' : s(fd, 'pin')
+  const branchId = uid(fd, 'branch') || null
+  const to = id ? `/app/ajustes/manicurista/${id}` : '/app/ajustes/manicurista/nuevo'
   if (!name) back(to, { err: 'Falta el nombre' })
   if (!phone) back(to, { err: PHONE_ERROR })
+  if (s(fd, 'branch') && !branchId) back(to, { err: 'Elige una sede' })
+  if (branchId && !(await one('select 1 from branches where id = $1 and tenant_id = $2 and active', [branchId, user.tenant_id]))) back(to, { err: 'Elige una sede' })
   if (pin && !/^\d{4,6}$/.test(pin)) back(to, { err: 'El PIN son 4 a 6 números' })
   if (!id && !pin) back(to, { err: 'Asigna un PIN para que pueda entrar' })
   const dup = await one(`select 1 from users where tenant_id=$1 and phone=$2 and id <> coalesce(nullif($3,'')::uuid, '00000000-0000-0000-0000-000000000000')`, [user.tenant_id, phone, id])
   if (dup) back(to, { err: 'Ya hay alguien del equipo con ese celular' })
-  // al entrar solo se escribe celular + PIN: un celular no puede estar en dos barberías
+  // al entrar solo se escribe celular + PIN: un celular no puede estar en dos spas
   const elsewhere = await one(`select 1 from users where phone = $1 and tenant_id <> $2`, [phone, user.tenant_id])
-  if (elsewhere) back(to, { err: 'Ese celular ya está registrado en otra barbería. Usa otro celular.' })
+  if (elsewhere) back(to, { err: 'Ese celular ya está registrado en otro spa. Usa otro celular.' })
   let barberId = id
-  if (id && fd.get('active') !== 'on') {
+  // dejar de recibir citas (desactivar, o la dueña que desmarca "Yo también atiendo") con citas por delante: primero hay que moverlas
+  const stops = id && (self ? fd.get('serves') !== 'on' : fd.get('active') !== 'on')
+  if (stops) {
     const future = await one<{ n: number }>(
       `select count(*)::int n from appointments where tenant_id = $1 and barber_id = $2 and status in ('pending', 'confirmed') and starts_at > now()`,
       [user.tenant_id, id],
     )
     if (future!.n > 0)
       back(to, {
-        err: `${name} tiene ${future!.n === 1 ? '1 cita próxima' : `${future!.n} citas próximas`}. Cancélalas o pásalas a otro barbero antes de desactivarlo.`,
+        err: `${name} tiene ${future!.n === 1 ? '1 cita próxima' : `${future!.n} citas próximas`}. Cancélalas o pásalas a otra manicurista antes de ${self ? 'dejar de atender' : 'desactivarla'}.`,
       })
   }
-  if (id) {
+  if (self) {
+    await one(`update users set name=$3, phone=$4, branch_id=$5, serves=$6 where id=$1 and tenant_id=$2 and role='owner'`, [id, user.tenant_id, name, phone, branchId, fd.get('serves') === 'on'])
+  } else if (id) {
     await one(`update users set name=$3, phone=$4, branch_id=$5, active=$6 where id=$1 and tenant_id=$2 and role='barber'`, [id, user.tenant_id, name, phone, branchId, fd.get('active') === 'on'])
     if (pin) await one(`update users set pin_hash=$3 where id=$1 and tenant_id=$2`, [id, user.tenant_id, hashPin(pin)])
   } else {
@@ -248,17 +328,19 @@ export async function saveBarber(fd: FormData) {
         blocks.push([wd, a, z])
       }
     }
-    await one(`delete from working_hours where barber_id=$1 and tenant_id=$2`, [barberId, user.tenant_id])
-    for (const [wd, a, z] of blocks)
-      await one(`insert into working_hours (tenant_id, barber_id, branch_id, weekday, start_min, end_min) values ($1,$2,$3,$4,$5,$6)`, [user.tenant_id, barberId, branchId, wd, a, z])
+    await tx(async (on) => {
+      await on.query(`delete from working_hours where barber_id=$1 and tenant_id=$2`, [barberId, user.tenant_id])
+      for (const [wd, a, z] of blocks)
+        await on.query(`insert into working_hours (tenant_id, barber_id, branch_id, weekday, start_min, end_min) values ($1,$2,$3,$4,$5,$6)`, [user.tenant_id, barberId, branchId, wd, a, z])
+    })
   }
-  back('/app/ajustes', { ok: 'Barbero guardado' })
+  back('/app/ajustes', { ok: self ? 'Tu horario quedó guardado' : 'Manicurista guardada' })
 }
 
 function toMin(v: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(v)
-  if (!m) return null
-  return Number(m[1]) * 60 + Number(m[2])
+  if (!m || Number(m[1]) > 24 || Number(m[2]) > 59) return null
+  return Math.min(24 * 60, Number(m[1]) * 60 + Number(m[2]))
 }
 
 export async function changeMyPin(fd: FormData) {
@@ -293,10 +375,11 @@ export async function saveShopRules(fd: FormData) {
 
 export async function saveBarberScheme(fd: FormData) {
   const user = await requireUser('owner')
-  const id = s(fd, 'id')
+  const id = uid(fd, 'id')
+  if (!id) back('/app/comisiones', { err: 'Manicurista no encontrada' })
   const to = `/app/comisiones/${id}?tab=esquema`
   const barber = await one('select 1 from users where id = $1 and tenant_id = $2 and role = $3', [id, user.tenant_id, 'barber'])
-  if (!barber) back('/app/comisiones', { err: 'Barbero no encontrado' })
+  if (!barber) back('/app/comisiones', { err: 'Manicurista no encontrada' })
   const model = s(fd, 'model')
   if (!['percent', 'fixed', 'rent'].includes(model)) back(to, { err: 'Elige el tipo de esquema' })
   const pctRaw = s(fd, 'percent')
@@ -342,15 +425,16 @@ export async function saveBarberScheme(fd: FormData) {
   back(to, { ok: 'Esquema guardado. Aplica a los cobros desde ahora.' })
 }
 
-// ---------------- pagos a barberos ----------------
+// ---------------- pagos a manicuristas ----------------
 
-/** Registrar un pago o adelanto al barbero, o el arriendo que paga un barbero de silla. */
+/** Registrar un pago o adelanto a la manicurista, o el arriendo que paga una manicurista de puesto. */
 export async function recordPayout(fd: FormData) {
   const user = await requireUser('owner')
-  const id = s(fd, 'id')
+  const id = uid(fd, 'id')
+  if (!id) back('/app/comisiones', { err: 'Manicurista no encontrada' })
   const to = `/app/comisiones/${id}`
   const barber = await one('select 1 from users where id = $1 and tenant_id = $2 and role = $3', [id, user.tenant_id, 'barber'])
-  if (!barber) back('/app/comisiones', { err: 'Barbero no encontrado' })
+  if (!barber) back('/app/comisiones', { err: 'Manicurista no encontrada' })
   const kind = s(fd, 'kind')
   if (!['pago', 'adelanto', 'arriendo'].includes(kind)) back(to, { err: 'Elige el tipo de pago' })
   const amount = money(s(fd, 'amount'))
@@ -370,8 +454,10 @@ export async function recordPayout(fd: FormData) {
 /** Anular un pago registrado por error (queda en el historial como anulado). */
 export async function voidPayout(fd: FormData) {
   const user = await requireUser('owner')
-  const id = s(fd, 'id')
-  await one(`update barber_payouts set voided_at = now(), voided_by = $3 where id = $1 and tenant_id = $2 and voided_at is null`, [s(fd, 'payout'), user.tenant_id, user.id])
+  const id = uid(fd, 'id')
+  const payout = uid(fd, 'payout')
+  if (!id || !payout) back('/app/comisiones', { err: 'Pago no encontrado' })
+  await one(`update barber_payouts set voided_at = now(), voided_by = $3 where id = $1 and tenant_id = $2 and voided_at is null`, [payout, user.tenant_id, user.id])
   revalidatePath('/app', 'layout')
   back(`/app/comisiones/${id}`, { ok: 'Pago anulado' })
 }

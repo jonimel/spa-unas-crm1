@@ -6,7 +6,7 @@ import { fmtPhone } from '@/lib/phone'
 import { fmtDay, fmtTime } from '@/lib/time'
 import { whatsappMode } from '@/lib/whatsapp'
 
-const KIND: Record<string, string> = { client: 'Cliente', barber: 'Barbero', owner: 'Dueño' }
+const KIND: Record<string, string> = { client: 'Clienta', barber: 'Manicurista', owner: 'Dueña' }
 
 export default async function Mensajes() {
   const user = await requireUser('owner')

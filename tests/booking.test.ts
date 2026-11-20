@@ -18,8 +18,8 @@ let ymd: string
 beforeAll(async () => {
   await getDb()
   t = (await tenantBySlug(DEMO.slug))!
-  branchId = (await one<{ id: string }>(`select id from branches where name = 'Villa Hermosa'`))!.id
-  serviceId = (await one<{ id: string }>(`select id from services where name = 'Barba'`))!.id
+  branchId = (await one<{ id: string }>(`select id from branches where name = 'El Poblado'`))!.id
+  serviceId = (await one<{ id: string }>(`select id from services where name = 'Manicure tradicional'`))!.id
   ymd = addDaysYmd(todayYmd(t.timezone), 5)
   while (weekdayOf(ymd) === 0) ymd = addDaysYmd(ymd, 1)
 })
@@ -29,9 +29,12 @@ const asUser = async (phone: string): Promise<CurrentUser> => {
   return { ...u, tenant_name: t.name, tenant_slug: t.slug, timezone: t.timezone }
 }
 
+/** Cobro a la hora de la cita (el cobro solo se habilita 3 h antes de empezar). */
+const startOf = async (id: string) => new Date((await one<{ s: Date }>('select starts_at s from appointments where id = $1', [id]))!.s)
+
 describe('online booking', () => {
   it('books a free slot as pending, then refuses the same barber at the same time', async () => {
-    const slots = await slotsFor(t, { branchId, durationMin: 30, ymd })
+    const slots = await slotsFor(t, { branchId, durationMin: 45, ymd })
     const slot = slots.find((s) => s.barberIds.length >= 1)!
     const barberId = slot.barberIds[0]
     const id = await createAppointment({ tenantId: t.id, branchId, serviceId, start: slot.start, barberId, clientName: 'Prueba Uno', clientPhone: '3190000001', source: 'online' })
@@ -41,7 +44,7 @@ describe('online booking', () => {
       createAppointment({ tenantId: t.id, branchId, serviceId, start: slot.start, barberId, clientName: 'Prueba Dos', clientPhone: '3190000002', source: 'online' }),
     ).rejects.toBeInstanceOf(BookingError)
     const msgs = await rows<{ template: string }>('select template from messages where appointment_id = $1 order by created_at', [id])
-    expect(msgs.map((m) => m.template).sort()).toEqual(['barbero_nueva_solicitud', 'solicitud_recibida'])
+    expect(msgs.map((m) => m.template).sort()).toEqual(['manicurista_nueva_solicitud', 'solicitud_recibida'])
   })
 
   it('approval deadline is 2 h, or 30 min before the appointment if sooner', () => {
@@ -51,16 +54,16 @@ describe('online booking', () => {
   })
 
   it('a barber cannot approve or cancel another barber’s appointment; the owner can', async () => {
-    const slots = await slotsFor(t, { branchId, durationMin: 30, ymd })
+    const slots = await slotsFor(t, { branchId, durationMin: 45, ymd })
     const slot = slots[slots.length - 1]
     const id = await createAppointment({ tenantId: t.id, branchId, serviceId, start: slot.start, barberId: null, clientName: 'Prueba Tres', clientPhone: '3190000003', source: 'online' })
     const appt = (await one<{ barber_id: string }>('select barber_id from appointments where id = $1', [id]))!
     const other = (await one<{ phone: string }>(`select phone from users where role = 'barber' and id <> $1 limit 1`, [appt.barber_id]))!
-    await expect(approve(await asUser(other.phone), id)).rejects.toThrow('otro barbero')
-    await expect(cancel(await asUser(other.phone), id)).rejects.toThrow('otro barbero')
+    await expect(approve(await asUser(other.phone), id)).rejects.toThrow('otra manicurista')
+    await expect(cancel(await asUser(other.phone), id)).rejects.toThrow('otra manicurista')
     const owner = await asUser(DEMO.owner.phone)
     await approve(owner, id)
-    await checkout(owner, id, 20000, 5000, 'nequi')
+    await checkout(owner, id, 20000, 5000, 'nequi', await startOf(id))
     const done = await one<{ status: string }>('select status from appointments where id = $1', [id])
     expect(done!.status).toBe('completed')
   })

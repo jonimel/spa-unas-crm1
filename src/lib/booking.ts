@@ -1,8 +1,10 @@
 import { one, rows, tx, type Queryable } from './db'
 import { computeSlots, type BarberDay, type Slot } from './availability'
-import { addDaysYmd, atLocal, fmtDay, fmtTime, localParts, todayYmd, weekdayOf } from './time'
+import { addDaysYmd, atLocal, fmtDay, fmtSpan, fmtTime, isYmd, localParts, todayYmd, weekdayOf } from './time'
 import { firstName, normalizeCoPhone } from './phone'
 import { sendWhatsApp } from './whatsapp'
+import { isUuid } from './validate'
+import { publicBase } from './base-url'
 
 export type Tenant = {
   id: string
@@ -18,7 +20,7 @@ export type Tenant = {
   booking_days_ahead: number
 }
 export type Branch = { id: string; name: string; address: string | null; phone: string | null }
-export type Service = { id: string; name: string; description: string | null; duration_min: number; price: number }
+export type Service = { id: string; name: string; description: string | null; duration_min: number; price: number; is_addon: boolean }
 export type Barber = { id: string; name: string; phone: string; branch_id: string | null }
 
 export const ACTIVE_STATUSES = `('pending','confirmed','completed')`
@@ -35,17 +37,20 @@ export async function tenantById(id: string, on?: Queryable) {
 export async function bookingCatalog(tenantId: string) {
   const [branches, services] = await Promise.all([
     rows<Branch>('select id, name, address, phone from branches where tenant_id = $1 and active order by sort, name', [tenantId]),
-    rows<Service>('select id, name, description, duration_min, price from services where tenant_id = $1 and active order by sort, name', [tenantId]),
+    rows<Service>('select id, name, description, duration_min, price, is_addon from services where tenant_id = $1 and active order by is_addon, sort, name', [tenantId]),
   ])
   return { branches, services }
 }
 
-/** Barberos que trabajan en una sede (tienen horario allí). */
+/** Quién recibe citas: las manicuristas y la dueña que marcó "Yo también atiendo" (alias de la tabla users: u). */
+export const BOOKABLE = `(u.role = 'barber' or u.serves)`
+
+/** Manicuristas que trabajan en una sede (tienen horario allí). */
 export async function barbersOfBranch(tenantId: string, branchId: string, on?: Queryable) {
   return rows<Barber>(
     `select distinct u.id, u.name, u.phone, u.branch_id
        from users u join working_hours w on w.barber_id = u.id
-      where u.tenant_id = $1 and w.branch_id = $2 and u.active and u.role = 'barber'
+      where u.tenant_id = $1 and w.branch_id = $2 and u.active and ${BOOKABLE}
       order by u.name`,
     [tenantId, branchId],
     on,
@@ -53,10 +58,11 @@ export async function barbersOfBranch(tenantId: string, branchId: string, on?: Q
 }
 
 async function barberDays(t: Tenant, branchId: string, ymd: string, onlyBarber: string | null, on?: Queryable): Promise<BarberDay[]> {
+  if (!isUuid(branchId) || (onlyBarber && !isUuid(onlyBarber)) || !isYmd(ymd)) return []
   const wd = weekdayOf(ymd)
   const hours = await rows<{ barber_id: string; start_min: number; end_min: number }>(
     `select w.barber_id, w.start_min, w.end_min
-       from working_hours w join users u on u.id = w.barber_id and u.active and u.role = 'barber'
+       from working_hours w join users u on u.id = w.barber_id and u.tenant_id = w.tenant_id and u.active and ${BOOKABLE}
       where w.tenant_id = $1 and w.branch_id = $2 and w.weekday = $3 ${onlyBarber ? 'and w.barber_id = $4' : ''}
       order by w.start_min`,
     onlyBarber ? [t.id, branchId, wd, onlyBarber] : [t.id, branchId, wd],
@@ -68,11 +74,11 @@ async function barberDays(t: Tenant, branchId: string, ymd: string, onlyBarber: 
   const dayEnd = atLocal(addDaysYmd(ymd, 1), 0, t.timezone)
   const busy = await rows<{ barber_id: string; start: Date; end: Date }>(
     `select barber_id, starts_at as start, ends_at as "end" from appointments
-      where barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at < $3 and ends_at > $2
+      where tenant_id = $4 and barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at < $3 and ends_at > $2
      union all
      select barber_id, starts_at, ends_at from time_off
-      where barber_id = any($1) and starts_at < $3 and ends_at > $2`,
-    [ids, dayStart, dayEnd],
+      where tenant_id = $4 and barber_id = any($1) and starts_at < $3 and ends_at > $2`,
+    [ids, dayStart, dayEnd, t.id],
     on,
   )
   return ids.map((id) => ({
@@ -102,11 +108,12 @@ export async function slotsFor(
 /** Resumen de los próximos días para la tira de fechas: cuántas horas libres hay en cada uno. */
 export async function daysOverview(t: Tenant, branchId: string, durationMin: number) {
   const start = todayYmd(t.timezone)
-  const out: { ymd: string; free: number }[] = []
+  const out: { ymd: string; free: number; open: boolean }[] = []
   for (let i = 0; i < t.booking_days_ahead; i++) {
     const ymd = addDaysYmd(start, i)
-    const s = await slotsFor(t, { branchId, durationMin, ymd })
-    out.push({ ymd, free: s.length })
+    const barbers = await barberDays(t, branchId, ymd, null)
+    const s = computeSlots({ ymd, tz: t.timezone, durationMin, stepMin: t.slot_step_min, now: new Date(), minNoticeMin: t.min_notice_min, barbers })
+    out.push({ ymd, free: s.length, open: barbers.length > 0 })
   }
   return out
 }
@@ -126,15 +133,15 @@ async function upsertClient(tenantId: string, name: string, phone: string | null
   return c!.id
 }
 
-/** Elige el barbero con menos citas ese día (reparto parejo cuando el cliente dice "cualquiera"). */
+/** Elige la manicurista con menos citas ese día (reparto parejo cuando la clienta dice "cualquiera"). */
 async function pickBarber(candidates: string[], t: Tenant, ymd: string, on: Queryable) {
   if (candidates.length === 1) return candidates[0]
   const dayStart = atLocal(ymd, 0, t.timezone)
   const dayEnd = atLocal(addDaysYmd(ymd, 1), 0, t.timezone)
   const counts = await rows<{ barber_id: string; n: number }>(
     `select barber_id, count(*)::int n from appointments
-      where barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at >= $2 and starts_at < $3 group by barber_id`,
-    [candidates, dayStart, dayEnd],
+      where tenant_id = $4 and barber_id = any($1) and status in ${ACTIVE_STATUSES} and starts_at >= $2 and starts_at < $3 group by barber_id`,
+    [candidates, dayStart, dayEnd, t.id],
     on,
   )
   const n = (id: string) => counts.find((c) => c.barber_id === id)?.n ?? 0
@@ -144,7 +151,10 @@ async function pickBarber(candidates: string[], t: Tenant, ymd: string, on: Quer
 export type NewBooking = {
   tenantId: string
   branchId: string
-  serviceId: string
+  /** uno o más servicios (los adicionales van con al menos un servicio principal) */
+  serviceIds?: string[]
+  /** atajo para un solo servicio */
+  serviceId?: string
   start: Date
   barberId: string | null
   clientName: string
@@ -154,13 +164,40 @@ export type NewBooking = {
   createdBy?: string | null
 }
 
+/** Servicios elegidos, validados: sin repetir, al menos uno principal; primero los principales y luego los adicionales. */
+export async function loadServices(tenantId: string, ids: string[], on?: Queryable): Promise<Service[]> {
+  const uniq = [...new Set(ids.filter(Boolean))]
+  if (!uniq.length) throw new BookingError('Elige al menos un servicio')
+  if (uniq.length > 8) throw new BookingError('Son demasiados servicios para una sola cita')
+  if (!uniq.every(isUuid)) throw new BookingError('Servicio no disponible')
+  const found = await rows<Service>(
+    'select id, name, description, duration_min, price, is_addon from services where tenant_id = $1 and active and id = any($2)',
+    [tenantId, uniq],
+    on,
+  )
+  if (found.length !== uniq.length) throw new BookingError('Servicio no disponible')
+  const ordered = uniq.map((id) => found.find((f) => f.id === id)!)
+  const mains = ordered.filter((x) => !x.is_addon)
+  if (!mains.length) throw new BookingError('Elige al menos un servicio principal (los adicionales van con otro servicio)')
+  return [...mains, ...ordered.filter((x) => x.is_addon)]
+}
+
+/** Duración y precio de una cita con varios servicios: la suma. */
+export const comboTotals = (svcs: Pick<Service, 'duration_min' | 'price'>[]) => ({
+  duration: svcs.reduce((a, x) => a + x.duration_min, 0),
+  price: svcs.reduce((a, x) => a + x.price, 0),
+})
+
+export const comboName = (svcs: Pick<Service, 'name'>[]) => svcs.map((x) => x.name).join(' + ')
+
 /** Crea una cita validando de nuevo la disponibilidad dentro de la transacción (evita doble reserva). */
 export async function createAppointment(b: NewBooking) {
   const id = await tx(async (on) => {
     const t = await tenantById(b.tenantId, on)
-    if (!t) throw new BookingError('Barbería no encontrada')
-    const svc = await one<Service>('select id, name, description, duration_min, price from services where id = $1 and tenant_id = $2 and active', [b.serviceId, t.id], on)
-    if (!svc) throw new BookingError('Servicio no disponible')
+    if (!t) throw new BookingError('Spa no encontrado')
+    const svcs = await loadServices(t.id, b.serviceIds ?? (b.serviceId ? [b.serviceId] : []), on)
+    const { duration, price } = comboTotals(svcs)
+    if (!isUuid(b.branchId)) throw new BookingError('Sede no disponible')
     const branch = await one<Branch>('select id, name, address, phone from branches where id = $1 and tenant_id = $2 and active', [b.branchId, t.id], on)
     if (!branch) throw new BookingError('Sede no disponible')
 
@@ -168,7 +205,7 @@ export async function createAppointment(b: NewBooking) {
     const online = b.source === 'online'
     const slots = await slotsFor(
       t,
-      { branchId: branch.id, durationMin: svc.duration_min, ymd, barberId: b.barberId, minNoticeMin: online ? t.min_notice_min : -24 * 60 },
+      { branchId: branch.id, durationMin: duration, ymd, barberId: b.barberId, minNoticeMin: online ? t.min_notice_min : -24 * 60 },
       on,
     )
     const slot = online ? slots.find((s) => s.minutes === minutes) : undefined
@@ -177,11 +214,12 @@ export async function createAppointment(b: NewBooking) {
       if (!slot) throw new BookingError('Esa hora ya no está disponible. Elige otra.')
       candidates = slot.barberIds
     } else {
-      // en la barbería (cliente de paso / el barbero agenda): cualquier minuto, solo sin cruces
-      if (!b.barberId) throw new BookingError('Elige el barbero')
-      const barber = await one('select 1 from users where id = $1 and tenant_id = $2 and role = $3 and active', [b.barberId, t.id, 'barber'], on)
-      if (!barber) throw new BookingError('Barbero no disponible')
-      const end = new Date(b.start.getTime() + svc.duration_min * 60_000)
+      // en el spa (clienta de paso / la manicurista agenda): cualquier minuto, solo sin cruces
+      if (!b.barberId) throw new BookingError('Elige la manicurista')
+      if (!isUuid(b.barberId)) throw new BookingError('Manicurista no disponible')
+      const barber = await one(`select 1 from users u where u.id = $1 and u.tenant_id = $2 and u.active and ${BOOKABLE}`, [b.barberId, t.id], on)
+      if (!barber) throw new BookingError('Manicurista no disponible')
+      const end = new Date(b.start.getTime() + duration * 60_000)
       const clash = await one<{ starts_at: Date; ends_at: Date }>(
         `select starts_at, ends_at from appointments where barber_id = $1 and status in ${ACTIVE_STATUSES} and starts_at < $3 and ends_at > $2 order by starts_at limit 1`,
         [b.barberId, b.start, end],
@@ -189,27 +227,28 @@ export async function createAppointment(b: NewBooking) {
       )
       if (clash)
         throw new BookingError(
-          `El barbero ya tiene una cita de ${fmtTime(new Date(clash.starts_at), t.timezone)} a ${fmtTime(new Date(clash.ends_at), t.timezone)}: elige otra hora, otro barbero o un servicio más corto.`,
+          `La manicurista ya tiene una cita de ${fmtTime(new Date(clash.starts_at), t.timezone)} a ${fmtTime(new Date(clash.ends_at), t.timezone)}: elige otra hora, otra manicurista o menos servicios.`,
         )
       candidates = [b.barberId]
     }
     const barberId = await pickBarber(candidates, t, ymd, on)
     const clientId = await upsertClient(t.id, b.clientName, b.clientPhone, on)
     const now = new Date()
-    const end = new Date(b.start.getTime() + svc.duration_min * 60_000)
+    const end = new Date(b.start.getTime() + duration * 60_000)
     const status = online ? 'pending' : 'confirmed'
     const row = await one<{ id: string }>(
       `insert into appointments (tenant_id, branch_id, barber_id, client_id, service_id, starts_at, ends_at, status, source,
                                  price, client_note, approval_deadline, decided_at, decided_by)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning id`,
       [
-        t.id, branch.id, barberId, clientId, svc.id, b.start, end, status, b.source, svc.price, b.note ?? null,
+        t.id, branch.id, barberId, clientId, svcs[0].id, b.start, end, status, b.source, price, b.note ?? null,
         online ? approvalDeadline(t, now, b.start) : null,
         online ? null : now,
         online ? null : (b.createdBy ?? null),
       ],
       on,
     )
+    await insertLines(t.id, row!.id, svcs, on)
     return row!.id
   })
 
@@ -219,16 +258,33 @@ export async function createAppointment(b: NewBooking) {
       if (v.client_phone)
         await sendWhatsApp({
           tenantId: v.tenant_id, toPhone: v.client_phone, template: 'solicitud_recibida', appointmentId: id,
-          vars: { nombre: firstName(v.client_name), barberia: v.tenant_name, servicio: v.service_name, fecha: v.day, hora: v.time, barbero: v.barber_name },
+          vars: {
+            nombre: firstName(v.client_name), spa: v.tenant_name, servicio: v.service_name, fecha: v.day, hora: v.time, manicurista: v.barber_name,
+            plazo: fmtSpan(v.approval_deadline ? (new Date(v.approval_deadline).getTime() - new Date(v.created_at).getTime()) / 60_000 : 120),
+          },
         })
       await sendWhatsApp({
-        tenantId: v.tenant_id, toPhone: v.barber_phone, template: 'barbero_nueva_solicitud', appointmentId: id,
-        vars: { barbero: firstName(v.barber_name), cliente: v.client_name, servicio: v.service_name, fecha: v.day, hora: v.time, limite: v.deadline_time ?? '' },
+        tenantId: v.tenant_id, toPhone: v.barber_phone, template: 'manicurista_nueva_solicitud', appointmentId: id,
+        vars: { manicurista: firstName(v.barber_name), cliente: v.client_name, servicio: v.service_name, fecha: v.day, hora: v.time, limite: v.deadline_time ?? '' },
       })
     }
   }
   return id
 }
+
+/** Guarda las líneas (servicios) de una cita. */
+export async function insertLines(tenantId: string, appointmentId: string, svcs: Service[], on: Queryable) {
+  const params: unknown[] = []
+  const values = svcs
+    .map((x, i) => `(${[tenantId, appointmentId, x.id, x.name, x.duration_min, x.price, x.is_addon, i].map((v) => `$${params.push(v)}`).join(',')})`)
+    .join(',')
+  await on.query(
+    `insert into appointment_services (tenant_id, appointment_id, service_id, name, duration_min, price, is_addon, sort) values ${values}`,
+    params,
+  )
+}
+
+export type ApptLine = { service_id: string | null; name: string; duration_min: number; price: number; is_addon: boolean; charged: number | null }
 
 export type ApptView = {
   id: string
@@ -245,8 +301,12 @@ export type ApptView = {
   client_id: string
   client_name: string
   client_phone: string | null
+  client_allergies: string | null
+  client_colors: string | null
   service_id: string
+  /** todos los servicios de la cita, unidos con " + " */
   service_name: string
+  lines: ApptLine[]
   duration_min: number
   starts_at: Date
   ends_at: Date
@@ -270,8 +330,11 @@ export const APPT_SELECT = `
   select a.id, a.tenant_id, t.name tenant_name, t.slug tenant_slug, t.timezone,
          a.branch_id, br.name branch_name, br.address branch_address,
          a.barber_id, u.name barber_name, u.phone barber_phone,
-         a.client_id, c.name client_name, c.phone client_phone,
-         a.service_id, s.name service_name, s.duration_min,
+         a.client_id, c.name client_name, c.phone client_phone, c.allergies client_allergies, c.favorite_colors client_colors,
+         a.service_id,
+         coalesce(l.names, s.name) service_name,
+         coalesce(l.lines, json_build_array(json_build_object('service_id', s.id, 'name', s.name, 'duration_min', s.duration_min, 'price', a.price, 'is_addon', false, 'charged', null))) lines,
+         (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int duration_min,
          a.starts_at, a.ends_at, a.status, a.source, a.price, a.client_note,
          a.approval_deadline, a.owner_alerted_at, a.created_at,
          p.amount paid_amount, p.tip paid_tip, p.method::text paid_method
@@ -281,6 +344,12 @@ export const APPT_SELECT = `
     join users u on u.id = a.barber_id
     join clients c on c.id = a.client_id
     join services s on s.id = a.service_id
+    left join lateral (
+      select string_agg(x.name, ' + ' order by x.sort) names,
+             json_agg(json_build_object('service_id', x.service_id, 'name', x.name, 'duration_min', x.duration_min, 'price', x.price,
+                                        'is_addon', x.is_addon, 'charged', x.charged) order by x.sort) lines
+        from appointment_services x where x.appointment_id = a.id
+    ) l on true
     left join payments p on p.appointment_id = a.id`
 
 export function decorate<T extends Omit<ApptView, 'day' | 'time' | 'deadline_time'>>(r: T): T & Pick<ApptView, 'day' | 'time' | 'deadline_time'> {
@@ -293,6 +362,7 @@ export function decorate<T extends Omit<ApptView, 'day' | 'time' | 'deadline_tim
 }
 
 export async function apptView(id: string, on?: Queryable): Promise<ApptView | null> {
+  if (!isUuid(id)) return null
   const r = await one<Omit<ApptView, 'day' | 'time' | 'deadline_time'>>(`${APPT_SELECT} where a.id = $1`, [id], on)
   return r ? decorate(r) : null
 }
@@ -302,19 +372,29 @@ export async function apptList(where: string, params: unknown[], order = 'a.star
   return rs.map(decorate)
 }
 
-function publicBase() {
-  const railway = process.env.RAILWAY_PUBLIC_DOMAIN && `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-  return (process.env.PUBLIC_URL || railway || 'http://localhost:3000').replace(/\/+$/, '')
+/**
+ * Celular de WhatsApp del spa para que la clienta escriba: el de la sede si es un celular,
+ * si no el de la dueña (los códigos cortos de prueba no sirven). null si no hay ninguno.
+ */
+export async function spaWhatsApp(tenantId: string, branchId?: string | null, on?: Queryable) {
+  const r = await one<{ branch: string | null; owner: string | null }>(
+    `select (select phone from branches where id = $2 and tenant_id = $1) branch,
+            (select phone from users where tenant_id = $1 and role = 'owner' and active order by created_at limit 1) owner`,
+    [tenantId, branchId ?? null],
+    on,
+  )
+  return normalizeCoPhone(r?.branch ?? '') ?? normalizeCoPhone(r?.owner ?? '')
 }
 
-/** Link público para que los clientes reserven (sin nada del equipo a la vista). */
+
+/** Link público para que las clientas reserven (sin nada del equipo a la vista). */
 export function bookingLink(slug: string) {
   return `${publicBase()}/r/${slug}`
 }
 
-/** Link para que los barberos entren a su agenda (va aparte del link de clientes). */
+/** Link para que las manicuristas entren a su agenda (va aparte del link de clientas). */
 export function staffLoginLink() {
-  return `${publicBase()}/entrar/barbero`
+  return `${publicBase()}/entrar/manicurista`
 }
 
 export { normalizeCoPhone }

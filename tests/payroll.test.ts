@@ -13,6 +13,9 @@ import type { CurrentUser } from '@/lib/auth'
 import { DEMO } from '@/lib/seed'
 import { addDaysYmd, todayYmd, weekdayOf } from '@/lib/time'
 
+/** Cobro a la hora de la cita (el cobro solo se habilita 3 h antes de empezar). */
+const startOf = async (id: string) => new Date((await one<{ s: Date }>('select starts_at s from appointments where id = $1', [id]))!.s)
+
 let t: Tenant
 let owner: CurrentUser
 
@@ -30,17 +33,20 @@ describe('commissions', () => {
   })
 
   it('freezes the barber share when a visit is charged, using the barber scheme', async () => {
-    // Andrés: 50% general, Corte + barba al 55%
-    const andres = (await one<{ id: string; branch_id: string }>(`select id, branch_id from users where phone = $1`, [DEMO.barbers[0].phone]))!
-    const svc = (await one<{ id: string }>(`select id from services where name = 'Corte + barba'`))!
+    // Camila: 50% general, Uñas acrílicas al 55%
+    const camila = (await one<{ id: string; branch_id: string }>(`select id, branch_id from users where phone = $1`, [DEMO.barbers[0].phone]))!
+    const svc = (await one<{ id: string }>(`select id from services where name = 'Uñas acrílicas'`))!
+    // el primer día (desde dentro de 6) en que Camila tiene 2 horas libres seguidas
     let ymd = addDaysYmd(todayYmd(t.timezone), 6)
-    while (weekdayOf(ymd) === 0) ymd = addDaysYmd(ymd, 1)
-    const slot = (await slotsFor(t, { branchId: andres.branch_id, durationMin: 60, ymd, barberId: andres.id }))[0]
-    const id = await createAppointment({ tenantId: t.id, branchId: andres.branch_id, serviceId: svc.id, start: slot.start, barberId: andres.id, clientName: 'Prueba Comisión', clientPhone: '3190000099', source: 'online' })
+    let slot: Awaited<ReturnType<typeof slotsFor>>[number] | undefined
+    for (let i = 0; i < 30 && !slot; i++, ymd = addDaysYmd(ymd, 1))
+      if (weekdayOf(ymd) !== 0) slot = (await slotsFor(t, { branchId: camila.branch_id, durationMin: 120, ymd, barberId: camila.id }))[0]
+    if (!slot) throw new Error('Camila no tiene 2 h libres en un mes')
+    const id = await createAppointment({ tenantId: t.id, branchId: camila.branch_id, serviceId: svc.id, start: slot.start, barberId: camila.id, clientName: 'Prueba Comisión', clientPhone: '3190000099', source: 'online' })
     await approve(owner, id)
-    await checkout(owner, id, 45000, 5000, 'efectivo')
+    await checkout(owner, id, 110000, 5000, 'efectivo', await startOf(id))
     const p = (await one<{ barber_share: number; barber_tip: number; shop_share: number; rule: string }>(`select barber_share, barber_tip, shop_share, rule from payments where appointment_id = $1`, [id]))!
-    expect(p).toMatchObject({ barber_share: 24750, barber_tip: 5000, shop_share: 20250 })
+    expect(p).toMatchObject({ barber_share: 60500, barber_tip: 5000, shop_share: 49500 })
     expect(p.rule).toContain('55%')
   })
 
@@ -55,7 +61,7 @@ describe('commissions', () => {
 describe('analytics', () => {
   it('computes the month, week and today views for the whole chain and per branch', async () => {
     const month = todayYmd(t.timezone).slice(0, 8) + '01'
-    const branch = (await one<{ id: string }>(`select id from branches where name = 'Villa Hermosa'`))!
+    const branch = (await one<{ id: string }>(`select id from branches where name = 'El Poblado'`))!
     for (const view of ['hoy', 'semana', 'mes'] as const) {
       const all = await statsFor(t.id, t.timezone, view, month, null)
       const one_ = await statsFor(t.id, t.timezone, view, month, branch.id)

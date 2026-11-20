@@ -43,7 +43,7 @@ export default async function Elegir() {
               <Avatar name={p.name} />
               <span className="grow">
                 <b>{p.name}</b>
-                <span>{p.role === 'owner' ? 'Dueño / Administrador' : `Barbero${p.branch ? ' · ' + p.branch : ''}`}</span>
+                <span>{p.role === 'owner' ? 'Dueña / Administración' : `Manicurista${p.branch ? ' · ' + p.branch : ''}`}</span>
               </span>
               <Icon name="back" style={{ transform: 'scaleX(-1)' }} />
             </button>

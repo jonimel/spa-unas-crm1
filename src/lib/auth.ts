@@ -3,6 +3,7 @@ import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { one, rows } from './db'
 import { verifyPin } from './pin'
+import { rememberHost } from './base-url'
 import { normalizeLoginPhone } from './phone'
 import { DEMO, demoLoginEnabled } from './seed'
 
@@ -19,7 +20,9 @@ export type CurrentUser = {
   timezone: string
 }
 
-const COOKIE = 'barbar_session'
+const COOKIE = 'spa_session'
+/** Nombre de la cookie antes de pasar a Spa Uñas: se sigue leyendo para no sacar a nadie de su sesión. */
+const OLD_COOKIE = 'barbar_session'
 const DAYS = 30
 
 export const MAX_FAILS = 5
@@ -28,7 +31,7 @@ export const LOCK_MINUTES = 10
 /** 'pick': la entrada común de la demo calzó con varios usuarios; se elige cuál en /entrar/elegir. */
 export type LoginResult = 'ok' | 'bad' | 'locked' | 'pick'
 
-/** Usuarios de la demo que abre la entrada común 1111 / 1111, según la puerta elegida (dueño o barbero). */
+/** Usuarios de la demo que abre la entrada común 1111 / 1111, según la puerta elegida (dueño o manicurista). */
 async function demoUsers(pin: string, role: Role) {
   if (!demoLoginEnabled() || pin !== DEMO.login.pin) return []
   return rows<{ id: string }>(
@@ -85,7 +88,7 @@ export async function login(phoneRaw: string, pin: string, role: Role = 'owner')
 
 // ---- Elegir usuario después de la entrada común de la demo ----
 // Se guarda en memoria del servidor (una sola instancia) por 10 minutos; la cookie solo lleva un código al azar.
-const PICK_COOKIE = 'barbar_pick'
+const PICK_COOKIE = 'spa_pick'
 const PICK_MINUTES = 10
 const picks: Map<string, { ids: string[]; exp: number }> = ((globalThis as { __barbarPicks?: Map<string, { ids: string[]; exp: number }> }).__barbarPicks ??= new Map())
 
@@ -133,13 +136,18 @@ export async function startSession(userId: string) {
 
 export async function logout() {
   const jar = await cookies()
-  const token = jar.get(COOKIE)?.value
+  const token = jar.get(COOKIE)?.value ?? jar.get(OLD_COOKIE)?.value
   if (token) await one('delete from sessions where token = $1', [token])
   jar.delete(COOKIE)
+  jar.delete(OLD_COOKIE)
 }
 
 export async function currentUser(): Promise<CurrentUser | null> {
-  const token = (await cookies()).get(COOKIE)?.value
+  const jar = await cookies()
+  const token = jar.get(COOKIE)?.value ?? jar.get(OLD_COOKIE)?.value
+  try {
+    rememberHost((await headers()).get('host'))
+  } catch {}
   if (!token) return null
   return one<CurrentUser>(
     `select u.id, u.tenant_id, u.role, u.name, u.phone, u.branch_id,

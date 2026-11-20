@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Icon } from '@/components/Icon'
 import { Avatar, Top } from '@/components/ui'
 import { requireUser } from '@/lib/auth'
+import { likeEscape } from '@/lib/validate'
 import { rows } from '@/lib/db'
 import { fmtPhone } from '@/lib/phone'
 import { fmtDay } from '@/lib/time'
@@ -14,11 +15,11 @@ export default async function Clientes({ searchParams }: PageProps<'/app/cliente
   const params: unknown[] = [user.tenant_id]
   let filter = ''
   if (q) {
-    params.push(`%${q.toLowerCase()}%`)
+    params.push(`%${likeEscape(q.toLowerCase())}%`)
     filter = `and (lower(c.name) like $2${digits.length >= 3 ? ` or c.phone like $3` : ''})`
     if (digits.length >= 3) params.push(`%${digits}%`)
   }
-  // el barbero ve todos los clientes de la barbería (para reconocer a quien llega), pero sin montos
+  // la manicurista ve todas las clientas del spa (para reconocer a quien llega), pero sin montos
   const list = await rows<{ id: string; name: string; phone: string | null; visits: number; last: Date | null }>(
     `select c.id, c.name, c.phone,
             count(a.id) filter (where a.status = 'completed')::int visits,
@@ -30,15 +31,15 @@ export default async function Clientes({ searchParams }: PageProps<'/app/cliente
   )
   return (
     <main>
-      <Top title="Clientes" sub={`${list.length}${list.length === 100 ? '+' : ''} ${q ? 'encontrados' : 'en total'}`} />
+      <Top title="Clientas" sub={`${list.length}${list.length === 100 ? '+' : ''} ${q ? 'encontradas' : 'en total'}`} />
       <form className="field" style={{ marginTop: 6 }}>
         <div className="in">
           <Icon name="search" style={{ color: 'var(--muted)' }} />
-          <input name="q" defaultValue={q} placeholder="Buscar por nombre o celular" type="search" aria-label="Buscar cliente" />
+          <input name="q" defaultValue={q} placeholder="Buscar por nombre o celular" type="search" aria-label="Buscar clienta" />
         </div>
       </form>
       <div className="list" style={{ marginTop: 8 }}>
-        {list.length === 0 && <div className="empty">No encontramos clientes{q ? ` con “${q}”` : ''}.</div>}
+        {list.length === 0 && <div className="empty">No encontramos clientas{q ? ` con “${q}”` : ''}.</div>}
         {list.map((c) => (
           <Link key={c.id} href={`/app/clientes/${c.id}`} className="li">
             <Avatar name={c.name} sm />

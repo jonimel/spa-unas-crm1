@@ -68,7 +68,7 @@ export async function statsFor(tenantId: string, tz: string, view: View, month: 
   const bf = branchId ? 'and branch_id = $4' : ''
   const params = (a: Date, b: Date) => (branchId ? [tenantId, a, b, branchId] : [tenantId, a, b])
 
-  const [pays, prevPays, appts, prevAppts, barbers, hours, firstVisits] = await Promise.all([
+  const [pays, prevPays, appts, prevAppts, barbers, hours, firstVisits, soldLines] = await Promise.all([
     rows<Pay>(
       `select p.amount, p.tip, p.method::text method, s.name service, p.barber_id, p.client_id, p.paid_at
          from payments p left join services s on s.id = p.service_id
@@ -78,9 +78,20 @@ export async function statsFor(tenantId: string, tz: string, view: View, month: 
     rows<Pay>(`select amount, tip, method::text method, null as service, barber_id, client_id, paid_at from payments where tenant_id = $1 and paid_at >= $2 and paid_at < $3 ${bf}`, params(prevStart, prevEnd)),
     rows<Appt>(`select barber_id, client_id, starts_at, ends_at, status::text status from appointments where tenant_id = $1 and starts_at >= $2 and starts_at < $3 ${bf}`, params(start, end)),
     rows<Appt>(`select barber_id, client_id, starts_at, ends_at, status::text status from appointments where tenant_id = $1 and starts_at >= $2 and starts_at < $3 ${bf}`, params(prevStart, prevEnd)),
-    rows<{ id: string; name: string; active: boolean }>(`select id, name, active from users where tenant_id = $1 and role = 'barber' order by name`, [tenantId]),
+    rows<{ id: string; name: string; active: boolean }>(`select id, name, active from users where tenant_id = $1 and (role = 'barber' or serves) order by name`, [tenantId]),
     rows<Hours>(`select barber_id, weekday, start_min, end_min from working_hours where tenant_id = $1 ${branchId ? 'and branch_id = $2' : ''}`, branchId ? [tenantId, branchId] : [tenantId]),
     rows<{ client_id: string; first: Date }>(`select client_id, min(starts_at) first from appointments where tenant_id = $1 and status = 'completed' group by client_id`, [tenantId]),
+    // qué se vende: cada servicio de la cita (también los adicionales) con su parte del valor cobrado
+    rows<{ service: string; amount: number }>(
+      `select x.name service, coalesce(x.charged, x.price) amount
+         from payments p join appointment_services x on x.appointment_id = p.appointment_id
+        where p.tenant_id = $1 and p.paid_at >= $2 and p.paid_at < $3 ${branchId ? 'and p.branch_id = $4' : ''}
+       union all
+       select coalesce(s.name, 'Otro'), p.amount from payments p left join services s on s.id = p.service_id
+        where p.tenant_id = $1 and p.paid_at >= $2 and p.paid_at < $3 ${branchId ? 'and p.branch_id = $4' : ''}
+          and not exists (select 1 from appointment_services x where x.appointment_id = p.appointment_id)`,
+      params(start, end),
+    ),
   ])
 
   // ---------- ocupación (horas reservadas / horas de trabajo) ----------
@@ -152,7 +163,7 @@ export async function statsFor(tenantId: string, tz: string, view: View, month: 
     const total = sum([...m.values()], (x) => x) || 1
     return [...m.entries()].map(([name, value]) => ({ name, value, pct: Math.round((value / total) * 100) })).sort((a, b) => b.value - a.value)
   }
-  const services = share(pays.map((p) => [p.service ?? 'Otro', p.amount]))
+  const services = share(soldLines.map((l) => [l.service, l.amount]))
   const methods = share(pays.map((p) => [p.method, p.amount + p.tip]))
 
   const byBarber = barbers
@@ -198,7 +209,7 @@ export async function statsFor(tenantId: string, tz: string, view: View, month: 
   const months: { key: string; label: string; total: number; current: boolean; future: boolean }[] = []
   for (let m = sixFrom, i = 0; i < 6; m = monthAfter(m), i++)
     months.push({ key: m.slice(0, 7), label: monthName(m, false), total: monthly.find((x) => x.ym === m.slice(0, 7))?.total ?? 0, current: m === anchorMonth, future: false })
-  // una barbería que empezó hace poco no ve meses vacíos antes de empezar
+  // un spa que empezó hace poco no ve meses vacíos antes de empezar
   while (months.length > 2 && months[0].total === 0) months.shift()
 
   // ---------- lo que vemos (hallazgos en lenguaje simple) ----------
@@ -236,7 +247,7 @@ export async function statsFor(tenantId: string, tz: string, view: View, month: 
       text: `${noShows} ${noShows === 1 ? 'cita no llegó' : 'citas no llegaron'} (${noShowPct}%)${prevNoShows ? `; en el periodo anterior fueron ${prevNoShows}` : ''}. El recordatorio por WhatsApp 2 horas antes ayuda a que sean menos.`,
     })
   if (clients.length)
-    insights.push({ tone: 'ok', text: `${Math.round((returning / clients.length) * 100)}% de los clientes ya habían venido antes; ${newClients} ${newClients === 1 ? 'es nuevo' : 'son nuevos'}.` })
+    insights.push({ tone: 'ok', text: `${Math.round((returning / clients.length) * 100)}% de las clientas ya habían venido antes; ${newClients} ${newClients === 1 ? 'es nueva' : 'son nuevas'}.` })
 
   return {
     view,

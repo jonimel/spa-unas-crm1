@@ -5,7 +5,7 @@ export type Rate = { kind: 'percent' | 'fixed'; value: number }
 
 export type Scheme = {
   model: PayModel
-  percent: number | null // null = por defecto de la barbería
+  percent: number | null // null = por defecto del spa
   rentAmount: number | null
   rentPeriod: 'daily' | 'weekly' | 'monthly' | null
   rentSince?: string | null // YYYY-MM-DD: desde cuándo corre el arriendo
@@ -21,10 +21,10 @@ export type ShopRules = {
 
 export type Share = { barberShare: number; barberTip: number; shopShare: number; rule: string }
 
-/** Regla guardada en los cobros de un barbero de silla: esa plata ya es suya, no entra en lo que se le debe. */
-export const RENT_RULE = 'Arriendo de silla: 100% para el barbero'
+/** Regla guardada en los cobros de una manicurista que arrienda su puesto: esa plata ya es suya, no entra en lo que se le debe. */
+export const RENT_RULE = 'Arriendo de puesto: 100% para la manicurista'
 
-/** Pagos a barberos: tipos y medios. */
+/** Pagos a las manicuristas: tipos y medios. */
 export type PayoutKind = 'pago' | 'adelanto' | 'arriendo'
 export const PAYOUT_KIND_LABEL: Record<PayoutKind, string> = { pago: 'Pago', adelanto: 'Adelanto', arriendo: 'Arriendo' }
 export const PAYOUT_METHODS = ['efectivo', 'nequi', 'daviplata', 'transferencia'] as const
@@ -32,39 +32,72 @@ export const PAYOUT_METHODS = ['efectivo', 'nequi', 'daviplata', 'transferencia'
 const pctLabel = (n: number) => `${Number(n.toFixed(2))}%`
 const money = (n: number) => '$' + Math.round(n).toLocaleString('es-CO').replace(/,/g, '.')
 
+/** Una línea (servicio) de la cita: su precio de lista sirve para repartir el valor cobrado entre las líneas. */
+export type ShareLine = { serviceId: string | null; price: number }
+export type LineShare = { serviceId: string | null; charged: number; barberShare: number; rule: string }
+
+/** Reparte `amount` entre las líneas en proporción a su precio (la última se queda con el redondeo). */
+export function splitAmount(amount: number, prices: number[]): number[] {
+  if (!prices.length) return []
+  const total = prices.reduce((a, b) => a + b, 0)
+  const out: number[] = []
+  let left = amount
+  prices.forEach((p, i) => {
+    if (i === prices.length - 1) out.push(left)
+    else {
+      const part = total > 0 ? Math.round((amount * p) / total) : i === 0 ? amount : 0
+      const v = Math.min(left, part)
+      out.push(v)
+      left -= v
+    }
+  })
+  return out
+}
+
+/**
+ * Lo que le toca a la manicurista y al spa en un cobro. Con varias líneas (servicios) en la cita, la regla de
+ * cada servicio (porcentaje especial o monto fijo) se aplica a su línea; la propina va aparte.
+ */
 export function computeShare(
-  p: { amount: number; tip: number; method: string; serviceId: string | null },
+  p: { amount: number; tip: number; method: string; serviceId?: string | null; lines?: ShareLine[] },
   scheme: Scheme | null,
   shop: ShopRules,
-): Share {
+): Share & { lines: LineShare[] } {
   const amount = Math.max(0, Math.round(p.amount))
   const tip = Math.max(0, Math.round(p.tip))
   const barberTip = shop.tipsToBarber ? tip : 0
   const fee = shop.deductCardFee && p.method === 'tarjeta' ? shop.cardFeePct / 100 : 0
-  const base = amount * (1 - fee)
   const feeNote = fee ? ` (menos ${pctLabel(shop.cardFeePct)} datáfono)` : ''
   const s = scheme ?? { model: 'percent' as const, percent: null, rentAmount: null, rentPeriod: null, rates: {} }
-  const rate = p.serviceId ? s.rates[p.serviceId] : undefined
+  const lines: ShareLine[] = p.lines?.length ? p.lines : [{ serviceId: p.serviceId ?? null, price: amount }]
+  const parts = splitAmount(amount, lines.map((l) => Math.max(0, l.price)))
 
-  let barberShare: number
-  let rule: string
-  if (s.model === 'rent') {
-    barberShare = amount
-    rule = RENT_RULE
-  } else if (rate?.kind === 'fixed') {
-    barberShare = Math.min(rate.value, amount)
-    rule = `Fijo ${money(rate.value)}`
-  } else if (rate?.kind === 'percent') {
-    barberShare = (base * rate.value) / 100
-    rule = `${pctLabel(rate.value)} (especial)${feeNote}`
-  } else {
-    // modelo fijo sin monto para este servicio → cae al porcentaje
-    const pct = s.percent ?? shop.defaultPct
-    barberShare = (base * pct) / 100
-    rule = `${pctLabel(pct)}${s.percent === null ? ' por defecto' : ''}${feeNote}`
-  }
-  barberShare = Math.round(barberShare)
-  return { barberShare, barberTip, shopShare: amount + tip - barberShare - barberTip, rule }
+  const out: LineShare[] = lines.map((l, i) => {
+    const charged = parts[i]
+    const base = charged * (1 - fee)
+    const rate = l.serviceId ? s.rates[l.serviceId] : undefined
+    let share: number
+    let rule: string
+    if (s.model === 'rent') {
+      share = charged
+      rule = RENT_RULE
+    } else if (rate?.kind === 'fixed') {
+      share = Math.min(rate.value, charged)
+      rule = `Fijo ${money(rate.value)}`
+    } else if (rate?.kind === 'percent') {
+      share = (base * rate.value) / 100
+      rule = `${pctLabel(rate.value)} (especial)${feeNote}`
+    } else {
+      // modelo fijo sin monto para este servicio → cae al porcentaje
+      const pct = s.percent ?? shop.defaultPct
+      share = (base * pct) / 100
+      rule = `${pctLabel(pct)}${s.percent === null ? ' por defecto' : ''}${feeNote}`
+    }
+    return { serviceId: l.serviceId, charged, barberShare: Math.round(share), rule }
+  })
+  const barberShare = out.reduce((a, l) => a + l.barberShare, 0)
+  const rules = [...new Set(out.map((l) => l.rule))]
+  return { barberShare, barberTip, shopShare: amount + tip - barberShare - barberTip, rule: rules.join(' + '), lines: out }
 }
 
 /** Arriendo de un periodo: el valor exacto si coincide con la unidad (semanal en una semana, mensual en un mes); si no, proporcional a los días. */
@@ -100,7 +133,7 @@ export function schemeSummary(s: Scheme | null, shop: ShopRules): { main: string
     return { main: `${pctLabel(shop.defaultPct)} · comisión por defecto`, extra: null, kind: 'dim' }
   if (s.model === 'rent') {
     const per = { daily: 'día', weekly: 'semana', monthly: 'mes' }[s.rentPeriod ?? 'weekly']
-    return { main: `Arriendo de silla · ${money(s.rentAmount ?? 0)}/${per}`, extra: null, kind: 'ok' }
+    return { main: `Arriendo de puesto · ${money(s.rentAmount ?? 0)}/${per}`, extra: null, kind: 'ok' }
   }
   const n = Object.keys(s.rates).length
   if (s.model === 'fixed') return { main: 'Monto fijo por servicio', extra: n === 1 ? '1 servicio' : `${n} servicios`, kind: 'brass' }
