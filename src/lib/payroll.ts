@@ -37,50 +37,73 @@ export async function schemesFor(tenantId: string, on?: Queryable): Promise<Map<
   return m
 }
 
-/** Calcula y guarda la repartición de los pagos que aún no la tienen (pagos nuevos o de antes de la fase 2). */
+/** Calcula y guarda la repartición de los pagos que aún no la tienen (pagos nuevos o de antes de la fase 2), línea por línea. */
 export async function settlePending(on: PGlite | Transaction, tenantId?: string) {
-  const pending = await rows<{ id: string; tenant_id: string; barber_id: string; service_id: string | null; amount: number; tip: number; method: string }>(
-    `select id, tenant_id, barber_id, service_id, amount, tip, method::text from payments where barber_share is null ${tenantId ? 'and tenant_id = $1' : ''}`,
+  const pending = await rows<{ id: string; appointment_id: string | null; tenant_id: string; barber_id: string; service_id: string | null; amount: number; tip: number; method: string }>(
+    `select id, appointment_id, tenant_id, barber_id, service_id, amount, tip, method::text from payments where barber_share is null ${tenantId ? 'and tenant_id = $1' : ''}`,
     tenantId ? [tenantId] : [],
     on,
   )
+  if (!pending.length) return 0
+  const lineRows = await rows<{ id: string; appointment_id: string; service_id: string | null; price: number }>(
+    `select id, appointment_id, service_id, price from appointment_services where appointment_id = any($1) order by appointment_id, sort`,
+    [pending.map((p) => p.appointment_id).filter(Boolean)],
+    on,
+  )
+  const byAppt = new Map<string, typeof lineRows>()
+  for (const l of lineRows) byAppt.set(l.appointment_id, [...(byAppt.get(l.appointment_id) ?? []), l])
   const cache = new Map<string, { shop: ShopRules; schemes: Map<string, Scheme> }>()
   const done: unknown[][] = []
+  const lineDone: unknown[][] = []
   for (const p of pending) {
     if (!cache.has(p.tenant_id)) cache.set(p.tenant_id, { shop: await shopRules(p.tenant_id, on), schemes: await schemesFor(p.tenant_id, on) })
     const c = cache.get(p.tenant_id)!
-    const s = computeShare({ amount: p.amount, tip: p.tip, method: p.method, serviceId: p.service_id }, c.schemes.get(p.barber_id) ?? null, c.shop)
+    const lines = (p.appointment_id && byAppt.get(p.appointment_id)) || []
+    const s = computeShare(
+      { amount: p.amount, tip: p.tip, method: p.method, serviceId: p.service_id, lines: lines.map((l) => ({ serviceId: l.service_id, price: l.price })) },
+      c.schemes.get(p.barber_id) ?? null,
+      c.shop,
+    )
     done.push([p.id, s.barberShare, s.barberTip, s.shopShare, s.rule])
+    lines.forEach((l, i) => lineDone.push([l.id, s.lines[i].charged, s.lines[i].barberShare, s.lines[i].rule]))
   }
   // en bloques, para que miles de pagos de antes se repartan en un momento
-  for (let i = 0; i < done.length; i += 500) {
-    const params: unknown[] = []
-    const values = done
-      .slice(i, i + 500)
-      .map((row) => `(${row.map((v) => `$${params.push(v)}`).join(',')})`)
-      .join(',')
-    await on.query(
-      `update payments p set barber_share = v.bs::int, barber_tip = v.bt::int, shop_share = v.ss::int, rule = v.rule
-         from (values ${values}) as v(id, bs, bt, ss, rule) where p.id = v.id::uuid`,
-      params,
-    )
+  const bulk = async (data: unknown[][], sql: (values: string) => string) => {
+    for (let i = 0; i < data.length; i += 500) {
+      const params: unknown[] = []
+      const values = data
+        .slice(i, i + 500)
+        .map((row) => `(${row.map((v) => `$${params.push(v)}`).join(',')})`)
+        .join(',')
+      await on.query(sql(values), params)
+    }
   }
+  await bulk(
+    done,
+    (values) => `update payments p set barber_share = v.bs::int, barber_tip = v.bt::int, shop_share = v.ss::int, rule = v.rule
+         from (values ${values}) as v(id, bs, bt, ss, rule) where p.id = v.id::uuid`,
+  )
+  await bulk(
+    lineDone,
+    (values) => `update appointment_services x set charged = v.ch::int, barber_share = v.bs::int, rule = v.rule
+         from (values ${values}) as v(id, ch, bs, rule) where x.id = v.id::uuid`,
+  )
   return pending.length
 }
 
-// ---------------- cuenta de cada barbero (pagos) ----------------
+// ---------------- cuenta de cada manicurista (pagos) ----------------
 
 export type Ledger = {
-  earned: number // comisiones + propinas cobradas desde que empezó la cuenta (sin lo de arriendo de silla, que ya es suyo)
+  earned: number // comisiones + propinas cobradas desde que empezó la cuenta (sin lo de arriendo de puesto, que ya es suyo)
   paid: number // pagos + adelantos registrados
-  owed: number // earned - paid: lo que la barbería le debe hoy (negativo = se le adelantó de más)
+  owed: number // earned - paid: lo que el spa le debe hoy (negativo = se le adelantó de más)
   rentDue: number // arriendos de los periodos ya empezados
   rentPaid: number
-  rentOwed: number // lo que el barbero debe de arriendo
+  rentOwed: number // lo que la manicurista debe de arriendo
   last: { paid_on: string; amount: number; kind: PayoutKind } | null
 }
 
-/** Saldo de cada barbero a hoy (`today` = fecha local YYYY-MM-DD). */
+/** Saldo de cada manicurista a hoy (`today` = fecha local YYYY-MM-DD). */
 export async function ledgers(tenantId: string, today: string, barberId?: string): Promise<Map<string, Ledger>> {
   const bf = barberId ? 'and barber_id = $2' : ''
   const base = barberId ? [tenantId, barberId] : [tenantId]
@@ -118,7 +141,7 @@ export async function ledgers(tenantId: string, today: string, barberId?: string
 
 export type PayoutRow = { id: string; kind: PayoutKind; amount: number; method: string; paid_on: string; note: string | null; voided: boolean; by: string | null }
 
-/** Movimientos de un barbero, del más reciente al más antiguo. */
+/** Movimientos de una manicurista, del más reciente al más antiguo. */
 export async function payoutsFor(tenantId: string, barberId: string, limit = 30) {
   return rows<PayoutRow>(
     `select p.id, p.kind::text kind, p.amount, p.method::text method, to_char(p.paid_on, 'YYYY-MM-DD') paid_on, p.note,
@@ -144,7 +167,7 @@ export type BarberTotals = {
   shop_share: number
 }
 
-/** Totales por barbero en un rango (pagos cobrados). Incluye barberos activos sin ventas. */
+/** Totales por manicurista en un rango (pagos cobrados). Incluye manicuristas activas sin ventas. */
 export async function totalsByBarber(tenantId: string, start: Date, end: Date, opts: { barberId?: string; branchId?: string } = {}) {
   const params: unknown[] = [tenantId, start, end]
   let extra = ''
@@ -176,15 +199,22 @@ export async function totalsByBarber(tenantId: string, start: Date, end: Date, o
 
 export type ServiceLine = { service: string; n: number; sales: number; share: number; rules: string[] }
 
-/** Desglose por servicio para un barbero (lo que ve en "Mis comisiones"). */
+/** Desglose por servicio para una manicurista (lo que ve en "Mis pagos"): cada servicio de la cita cuenta en su línea. */
 export async function breakdownByService(barberId: string, start: Date, end: Date): Promise<ServiceLine[]> {
   const r = await rows<{ service: string | null; n: number; sales: number; share: number; rules: string[] }>(
-    `select s.name service, count(*)::int n, sum(p.amount)::int sales, sum(p.barber_share)::int share,
-            array_agg(distinct p.rule) rules
-       from payments p left join services s on s.id = p.service_id
-      where p.barber_id = $1 and p.paid_at >= $2 and p.paid_at < $3
-      group by s.name order by sum(p.barber_share) desc`,
+    `with l as (
+       select x.name service, coalesce(x.charged, 0) sales, coalesce(x.barber_share, 0) share, x.rule
+         from payments p join appointment_services x on x.appointment_id = p.appointment_id
+        where p.barber_id = $1 and p.paid_at >= $2 and p.paid_at < $3
+       union all
+       select s.name, p.amount, coalesce(p.barber_share, 0), p.rule
+         from payments p left join services s on s.id = p.service_id
+        where p.barber_id = $1 and p.paid_at >= $2 and p.paid_at < $3
+          and not exists (select 1 from appointment_services x where x.appointment_id = p.appointment_id)
+     )
+     select service, count(*)::int n, sum(sales)::int sales, sum(share)::int share, array_agg(distinct rule) rules
+       from l group by service order by sum(share) desc`,
     [barberId, start, end],
   )
-  return r.map((x) => ({ ...x, service: x.service ?? 'Otro' }))
+  return r.map((x) => ({ ...x, service: x.service ?? 'Otro', rules: x.rules.filter(Boolean) }))
 }

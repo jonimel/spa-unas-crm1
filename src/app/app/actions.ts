@@ -75,7 +75,7 @@ export async function checkoutAction(fd: FormData) {
   back('/app/agenda', { ok: 'Visita cobrada ✓' })
 }
 
-/** Cliente de paso o cita agendada por el barbero/dueño (queda confirmada de una). */
+/** Cliente de paso o cita agendada por la manicurista/dueño (queda confirmada de una). */
 export async function newAppointmentAction(fd: FormData) {
   const user = await requireUser()
   const t = (await tenantById(user.tenant_id))!
@@ -86,7 +86,7 @@ export async function newAppointmentAction(fd: FormData) {
     [barberId],
   )
   const branchId = s(fd, 'branch') || branch?.branch_id
-  if (!branchId) back(to, { err: 'El barbero no tiene horario en ninguna sede' })
+  if (!branchId) back(to, { err: 'La manicurista no tiene horario en ninguna sede' })
   const rawPhone = s(fd, 'phone')
   const phone = rawPhone ? normalizeCoPhone(rawPhone) : null
   if (rawPhone && !phone) back(to, { err: PHONE_ERROR })
@@ -110,7 +110,7 @@ export async function newAppointmentAction(fd: FormData) {
     createAppointment({
       tenantId: t.id,
       branchId: branchId!,
-      serviceId: s(fd, 'service'),
+      serviceIds: fd.getAll('service').map((v) => String(v)),
       start,
       barberId,
       clientName,
@@ -127,11 +127,19 @@ export async function newAppointmentAction(fd: FormData) {
 
 // ---------------- clientes ----------------
 
+/** Ficha de la clienta: notas, colores favoritos y alergias (el equipo las ve en la agenda y la cita). */
 export async function saveClientNotes(fd: FormData) {
   const user = await requireUser()
   const id = s(fd, 'id')
-  await one('update clients set notes = $3 where id = $1 and tenant_id = $2', [id, user.tenant_id, s(fd, 'notes').slice(0, 2000) || null])
-  back(`/app/clientes/${id}`, { ok: 'Notas guardadas' })
+  await one('update clients set notes = $3, favorite_colors = $4, allergies = $5 where id = $1 and tenant_id = $2', [
+    id,
+    user.tenant_id,
+    s(fd, 'notes').slice(0, 2000) || null,
+    s(fd, 'favorite_colors').slice(0, 300) || null,
+    s(fd, 'allergies').slice(0, 300) || null,
+  ])
+  revalidatePath('/app', 'layout')
+  back(`/app/clientes/${id}`, { ok: 'Ficha guardada' })
 }
 
 export async function readAlert(fd: FormData) {
@@ -151,10 +159,27 @@ export async function saveService(fd: FormData) {
   const price = Number(s(fd, 'price').replace(/\D/g, ''))
   if (!name || !(dur > 0) || !(price >= 0)) back('/app/ajustes', { err: 'Revisa nombre, duración y precio' })
   const active = fd.get('active') === 'on'
+  const addon = fd.get('is_addon') === 'on'
+  const refillRaw = s(fd, 'refill_days')
+  const refill = refillRaw ? Number(refillRaw) : null
+  if (refill !== null && !(Number.isInteger(refill) && refill >= 1 && refill <= 365)) back('/app/ajustes', { err: 'Los días para el retoque van de 1 a 365' })
   if (id)
-    await one(`update services set name=$3, description=$4, duration_min=$5, price=$6, active=$7 where id=$1 and tenant_id=$2`, [id, user.tenant_id, name, s(fd, 'description') || null, dur, price, active])
+    await one(`update services set name=$3, description=$4, duration_min=$5, price=$6, active=$7, is_addon=$8, refill_days=$9 where id=$1 and tenant_id=$2`, [
+      id,
+      user.tenant_id,
+      name,
+      s(fd, 'description') || null,
+      dur,
+      price,
+      active,
+      addon,
+      refill,
+    ])
   else
-    await one(`insert into services (tenant_id, name, description, duration_min, price, sort) values ($1,$2,$3,$4,$5,(select coalesce(max(sort),0)+1 from services where tenant_id=$1))`, [user.tenant_id, name, s(fd, 'description') || null, dur, price])
+    await one(
+      `insert into services (tenant_id, name, description, duration_min, price, is_addon, refill_days, sort) values ($1,$2,$3,$4,$5,$6,$7,(select coalesce(max(sort),0)+1 from services where tenant_id=$1))`,
+      [user.tenant_id, name, s(fd, 'description') || null, dur, price, addon, refill],
+    )
   back('/app/ajustes', { ok: 'Servicio guardado' })
 }
 
@@ -208,16 +233,16 @@ export async function saveBarber(fd: FormData) {
   const phone = normalizeCoPhone(s(fd, 'phone')) ?? (saved?.phone === typed ? typed : null)
   const pin = s(fd, 'pin')
   const branchId = s(fd, 'branch') || null
-  const to = id ? `/app/ajustes/barbero/${id}` : '/app/ajustes/barbero/nuevo'
+  const to = id ? `/app/ajustes/manicurista/${id}` : '/app/ajustes/manicurista/nuevo'
   if (!name) back(to, { err: 'Falta el nombre' })
   if (!phone) back(to, { err: PHONE_ERROR })
   if (pin && !/^\d{4,6}$/.test(pin)) back(to, { err: 'El PIN son 4 a 6 números' })
   if (!id && !pin) back(to, { err: 'Asigna un PIN para que pueda entrar' })
   const dup = await one(`select 1 from users where tenant_id=$1 and phone=$2 and id <> coalesce(nullif($3,'')::uuid, '00000000-0000-0000-0000-000000000000')`, [user.tenant_id, phone, id])
   if (dup) back(to, { err: 'Ya hay alguien del equipo con ese celular' })
-  // al entrar solo se escribe celular + PIN: un celular no puede estar en dos barberías
+  // al entrar solo se escribe celular + PIN: un celular no puede estar en dos spas
   const elsewhere = await one(`select 1 from users where phone = $1 and tenant_id <> $2`, [phone, user.tenant_id])
-  if (elsewhere) back(to, { err: 'Ese celular ya está registrado en otra barbería. Usa otro celular.' })
+  if (elsewhere) back(to, { err: 'Ese celular ya está registrado en otro spa. Usa otro celular.' })
   let barberId = id
   if (id && fd.get('active') !== 'on') {
     const future = await one<{ n: number }>(
@@ -226,7 +251,7 @@ export async function saveBarber(fd: FormData) {
     )
     if (future!.n > 0)
       back(to, {
-        err: `${name} tiene ${future!.n === 1 ? '1 cita próxima' : `${future!.n} citas próximas`}. Cancélalas o pásalas a otro barbero antes de desactivarlo.`,
+        err: `${name} tiene ${future!.n === 1 ? '1 cita próxima' : `${future!.n} citas próximas`}. Cancélalas o pásalas a otra manicurista antes de desactivarla.`,
       })
   }
   if (id) {
@@ -252,7 +277,7 @@ export async function saveBarber(fd: FormData) {
     for (const [wd, a, z] of blocks)
       await one(`insert into working_hours (tenant_id, barber_id, branch_id, weekday, start_min, end_min) values ($1,$2,$3,$4,$5,$6)`, [user.tenant_id, barberId, branchId, wd, a, z])
   }
-  back('/app/ajustes', { ok: 'Barbero guardado' })
+  back('/app/ajustes', { ok: 'Manicurista guardada' })
 }
 
 function toMin(v: string): number | null {
@@ -296,7 +321,7 @@ export async function saveBarberScheme(fd: FormData) {
   const id = s(fd, 'id')
   const to = `/app/comisiones/${id}?tab=esquema`
   const barber = await one('select 1 from users where id = $1 and tenant_id = $2 and role = $3', [id, user.tenant_id, 'barber'])
-  if (!barber) back('/app/comisiones', { err: 'Barbero no encontrado' })
+  if (!barber) back('/app/comisiones', { err: 'Manicurista no encontrada' })
   const model = s(fd, 'model')
   if (!['percent', 'fixed', 'rent'].includes(model)) back(to, { err: 'Elige el tipo de esquema' })
   const pctRaw = s(fd, 'percent')
@@ -342,15 +367,15 @@ export async function saveBarberScheme(fd: FormData) {
   back(to, { ok: 'Esquema guardado. Aplica a los cobros desde ahora.' })
 }
 
-// ---------------- pagos a barberos ----------------
+// ---------------- pagos a manicuristas ----------------
 
-/** Registrar un pago o adelanto al barbero, o el arriendo que paga un barbero de silla. */
+/** Registrar un pago o adelanto a la manicurista, o el arriendo que paga una manicurista de puesto. */
 export async function recordPayout(fd: FormData) {
   const user = await requireUser('owner')
   const id = s(fd, 'id')
   const to = `/app/comisiones/${id}`
   const barber = await one('select 1 from users where id = $1 and tenant_id = $2 and role = $3', [id, user.tenant_id, 'barber'])
-  if (!barber) back('/app/comisiones', { err: 'Barbero no encontrado' })
+  if (!barber) back('/app/comisiones', { err: 'Manicurista no encontrada' })
   const kind = s(fd, 'kind')
   if (!['pago', 'adelanto', 'arriendo'].includes(kind)) back(to, { err: 'Elige el tipo de pago' })
   const amount = money(s(fd, 'amount'))

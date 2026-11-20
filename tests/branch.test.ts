@@ -42,16 +42,16 @@ beforeAll(async () => {
 
 describe('closing a branch', () => {
   it('refuses to close the only open branch', async () => {
-    const b = (await one<{ id: string }>(`select id from branches where name = 'Villa Hermosa'`))!
+    const b = (await one<{ id: string }>(`select id from branches where name = 'El Poblado'`))!
     expect(await run(closeBranch(form({ id: b.id })))).toContain('err=No puedes cerrar la única sede abierta')
   })
 
   it('refuses while the branch still has active barbers, and names them', async () => {
     await run(saveBranch(form({ id: '', name: 'Sede Dos', address: '' })))
-    const b = (await one<{ id: string }>(`select id from branches where name = 'Villa Hermosa'`))!
+    const b = (await one<{ id: string }>(`select id from branches where name = 'El Poblado'`))!
     const r = await run(closeBranch(form({ id: b.id })))
-    expect(r).toContain('err=Antes de cerrar Villa Hermosa')
-    expect(r).toContain('Andrés Rojas')
+    expect(r).toContain('err=Antes de cerrar El Poblado')
+    expect(r).toContain('Camila Restrepo')
     const dos = (await one<{ id: string }>(`select id from branches where name = 'Sede Dos'`))!
     await run(closeBranch(form({ id: dos.id })))
   })

@@ -7,27 +7,27 @@ const andres: Scheme = { model: 'percent', percent: 50, rentAmount: null, rentPe
 
 describe('computeShare', () => {
   it('uses the shop default when the barber has no scheme', () => {
-    const s = computeShare({ amount: 30000, tip: 0, method: 'efectivo', serviceId: 'corte' }, null, shop)
+    const s = computeShare({ amount: 30000, tip: 0, method: 'efectivo', serviceId: 'mani' }, null, shop)
     expect(s.barberShare).toBe(13500)
     expect(s.shopShare).toBe(16500)
     expect(s.rule).toBe('45% por defecto')
   })
 
   it('applies the barber percent, per-service percent and fixed exceptions', () => {
-    expect(computeShare({ amount: 30000, tip: 0, method: 'efectivo', serviceId: 'corte' }, andres, shop).barberShare).toBe(15000)
+    expect(computeShare({ amount: 30000, tip: 0, method: 'efectivo', serviceId: 'mani' }, andres, shop).barberShare).toBe(15000)
     expect(computeShare({ amount: 45000, tip: 0, method: 'efectivo', serviceId: 'cb' }, andres, shop).barberShare).toBe(24750)
     expect(computeShare({ amount: 10000, tip: 0, method: 'efectivo', serviceId: 'cejas' }, andres, shop)).toMatchObject({ barberShare: 5000, rule: 'Fijo $5.000' })
   })
 
   it('gives tips to the barber, or to the shop when the rule says so', () => {
-    const a = computeShare({ amount: 30000, tip: 5000, method: 'nequi', serviceId: 'corte' }, andres, shop)
+    const a = computeShare({ amount: 30000, tip: 5000, method: 'nequi', serviceId: 'mani' }, andres, shop)
     expect(a).toMatchObject({ barberShare: 15000, barberTip: 5000, shopShare: 15000 })
-    const b = computeShare({ amount: 30000, tip: 5000, method: 'nequi', serviceId: 'corte' }, andres, { ...shop, tipsToBarber: false })
+    const b = computeShare({ amount: 30000, tip: 5000, method: 'nequi', serviceId: 'mani' }, andres, { ...shop, tipsToBarber: false })
     expect(b).toMatchObject({ barberTip: 0, shopShare: 20000 })
   })
 
   it('can discount the card fee before the percent', () => {
-    const s = computeShare({ amount: 30000, tip: 0, method: 'tarjeta', serviceId: 'corte' }, andres, { ...shop, deductCardFee: true })
+    const s = computeShare({ amount: 30000, tip: 0, method: 'tarjeta', serviceId: 'mani' }, andres, { ...shop, deductCardFee: true })
     expect(s.barberShare).toBe(14550) // 50% de 29.100
   })
 

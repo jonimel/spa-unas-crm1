@@ -19,7 +19,7 @@ function Delta({ d }: { d: number | null }) {
   return <span className={d >= 0 ? 'delta-up' : 'delta-down'}>{d >= 0 ? `▲ ${d}%` : `▼ ${Math.abs(d)}%`}</span>
 }
 
-const heatBg = (p: number | null) => (p === null ? 'var(--surface-2)' : `rgba(201,163,92,${(0.1 + (p / 100) * 0.9).toFixed(2)})`)
+const heatBg = (p: number | null) => (p === null ? 'var(--surface-2)' : `rgba(var(--brass-rgb),${(0.1 + (p / 100) * 0.9).toFixed(2)})`)
 
 export default async function Analisis({ searchParams }: PageProps<'/app/analisis'>) {
   const user = await requireUser('owner')
@@ -262,7 +262,7 @@ export default async function Analisis({ searchParams }: PageProps<'/app/analisi
         ])}
       </div>
 
-      <div className="eyebrow">Barberos</div>
+      <div className="eyebrow">Manicuristas</div>
       <div className="card list" style={{ paddingBlock: 4 }}>
         {st.byBarber.map((b) => (
           <div key={b.id} className="li">

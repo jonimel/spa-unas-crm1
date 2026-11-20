@@ -4,18 +4,18 @@ import { Brand } from '@/components/ui'
 import { STAFF_ROLES } from './entrar/roles'
 
 // Inicio: dos caminos separados para que nadie se confunda.
-// Clientes → /reservar (o directo al link de su barbería). Equipo → /entrar/dueno o /entrar/barbero.
+// Clientes → /reservar (o directo al link de su spa). Equipo → /entrar/dueno o /entrar/manicurista.
 export default function Home() {
   return (
     <main className="page">
       <div className="top">
-        <Brand name="Barbar" sub="Agenda para barberías" />
+        <Brand name="Spa Uñas" sub="Agenda para spas de uñas" />
       </div>
       <h2 className="hero-title">
-        Tu barbería, <em>en orden</em>
+        Tu spa, <em>en orden</em>
       </h2>
       <p className="muted" style={{ lineHeight: 1.5 }}>
-        Reservas por link, agenda de cada barbero, cobros, pagos al equipo y clientes. Desde el celular, sin descargar nada.
+        Reservas por link, agenda de cada manicurista, cobros, pagos al equipo y clientes. Desde el celular, sin descargar nada.
       </p>
 
       <div className="eyebrow">Clientes</div>
@@ -25,12 +25,12 @@ export default function Home() {
         </span>
         <span className="grow">
           <b>Reservar una cita</b>
-          <span>Elige tu barbería, el servicio y la hora. Sin cuenta ni app.</span>
+          <span>Elige tu spa, el servicio y la hora. Sin cuenta ni app.</span>
         </span>
         <Icon name="back" style={{ transform: 'scaleX(-1)' }} />
       </Link>
 
-      <div className="eyebrow">Equipo de la barbería</div>
+      <div className="eyebrow">Equipo del spa</div>
       <div className="stack">
         {Object.entries(STAFF_ROLES).map(([key, r]) => (
           <Link key={key} className="role" href={`/entrar/${key}`}>
@@ -48,7 +48,7 @@ export default function Home() {
 
       <div className="stack" style={{ marginTop: 26 }}>
         <Link className="btn ghost" href="/registro">
-          Registrar mi barbería
+          Registrar mi spa
         </Link>
       </div>
     </main>

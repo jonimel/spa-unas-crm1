@@ -29,18 +29,45 @@ export default async function Cobrar({ params, searchParams }: PageProps<'/app/c
       ) : (
         <form action={checkoutAction}>
           <input type="hidden" name="id" value={id} />
-          <div className="card row" style={{ marginTop: 12 }}>
-            <Avatar name={a.client_name} />
-            <div className="grow">
-              <b>{a.service_name}</b>
-              <div className="small muted">
-                {a.barber_name} · {a.branch_name}
+          {a.client_allergies && (
+            <div className="alert-allergy" role="note" style={{ marginTop: 12 }}>
+              <Icon name="alert" />
+              <div>
+                <b>Alergias y sensibilidades</b>
+                {a.client_allergies}
               </div>
             </div>
-            <span className="price">{fmtMoney(a.price)}</span>
+          )}
+          <div className="card" style={{ marginTop: 12 }}>
+            <div className="row">
+              <Avatar name={a.client_name} />
+              <div className="grow">
+                <b>{a.client_name}</b>
+                <div className="small muted">
+                  {a.barber_name} · {a.branch_name}
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              {a.lines.map((l, i) => (
+                <div className="kv" key={i}>
+                  <span>
+                    {l.is_addon ? '+ ' : ''}
+                    {l.name}
+                  </span>
+                  <span className="num">{fmtMoney(l.price)}</span>
+                </div>
+              ))}
+              {a.lines.length > 1 && (
+                <div className="kv">
+                  <b>Total</b>
+                  <b className="num">{fmtMoney(a.price)}</b>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="eyebrow">Valor del servicio</div>
+          <div className="eyebrow">{a.lines.length > 1 ? 'Valor de los servicios' : 'Valor del servicio'}</div>
           <label className="big-in" htmlFor="amount">
             <b>$</b>
             <input

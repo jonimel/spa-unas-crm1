@@ -11,7 +11,7 @@ import { isStaffRole, STAFF_ROLES } from '../roles'
 async function doLogin(fd: FormData) {
   'use server'
   const rol = String(fd.get('rol') ?? '')
-  const back = `/entrar/${isStaffRole(rol) ? rol : 'barbero'}`
+  const back = `/entrar/${isStaffRole(rol) ? rol : 'manicurista'}`
   const phone = String(fd.get('phone') ?? '')
   if (!normalizeLoginPhone(phone)) redirect(`${back}?err=phone`)
   const r = await login(phone, String(fd.get('pin') ?? ''), rol === 'dueno' ? 'owner' : 'barber')
@@ -25,6 +25,8 @@ export async function generateMetadata({ params }: PageProps<'/entrar/[rol]'>) {
 
 export default async function EntrarRol({ params, searchParams }: PageProps<'/entrar/[rol]'>) {
   const { rol } = await params
+  // link de antes para el equipo (/entrar/barbero)
+  if (rol === 'barbero') redirect('/entrar/manicurista')
   if (!isStaffRole(rol)) notFound()
   if (await currentUser()) redirect('/app')
   const { err } = await searchParams
@@ -74,11 +76,11 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
         <button className="btn" type="submit">
           Entrar como {r.short}
         </button>
-        {rol === 'barbero' && <p className="small muted">¿Olvidaste tu PIN? Pídele al dueño de la barbería que te asigne uno nuevo.</p>}
+        {rol === 'manicurista' && <p className="small muted">¿Olvidaste tu PIN? Pídele al dueño del spa que te asigne uno nuevo.</p>}
         <p className="small muted">
           {rol === 'dueno' ? (
             <>
-              ¿Eres barbero? <Link className="link" href="/entrar/barbero">Entra como barbero</Link>
+              ¿Eres manicurista? <Link className="link" href="/entrar/manicurista">Entra como manicurista</Link>
             </>
           ) : (
             <>
@@ -93,12 +95,12 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
           <div className="eyebrow">Usuarios de prueba</div>
           <div className="card">
             <div className="kv">
-              <span>{rol === 'dueno' ? DEMO.owner.name : 'Todos los barberos'}</span>
+              <span>{rol === 'dueno' ? DEMO.owner.name : 'Todas las manicuristas'}</span>
               <span className="num">
                 {DEMO.login.phone} · PIN {DEMO.login.pin}
               </span>
             </div>
-            {rol === 'barbero' && <p className="small muted" style={{ margin: '6px 0 0' }}>Después eliges con cuál barbero entrar.</p>}
+            {rol === 'manicurista' && <p className="small muted" style={{ margin: '6px 0 0' }}>Después eliges con cuál manicurista entrar.</p>}
           </div>
         </>
       )}

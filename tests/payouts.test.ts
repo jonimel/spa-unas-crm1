@@ -62,7 +62,7 @@ describe('barber balances (demo data)', () => {
     const l = (await ledgers(t.id, today)).get(await barberId(3))!
     expect(l.earned).toBe(0)
     expect(l.owed).toBe(0)
-    expect(l.rentOwed).toBe(350000)
+    expect(l.rentOwed).toBe(300000)
     const list = await payoutsFor(t.id, await barberId(3), 5)
     expect(list[0].kind).toBe('arriendo')
   })

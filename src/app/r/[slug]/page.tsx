@@ -1,7 +1,6 @@
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { bookingCatalog, tenantBySlug } from '@/lib/booking'
 import { rows } from '@/lib/db'
-import { DEMO } from '@/lib/seed'
 import { BookingFlow } from './BookingFlow'
 
 export async function generateMetadata({ params }: PageProps<'/r/[slug]'>) {
@@ -12,7 +11,6 @@ export async function generateMetadata({ params }: PageProps<'/r/[slug]'>) {
 export default async function BookingPage({ params }: PageProps<'/r/[slug]'>) {
   const { slug } = await params
   const t = await tenantBySlug(slug)
-  if (!t && slug === DEMO.oldSlug && (await tenantBySlug(DEMO.slug))) redirect(`/r/${DEMO.slug}`)
   if (!t) notFound()
   const { branches, services } = await bookingCatalog(t.id)
   const barbers = await rows<{ id: string; name: string; branch_ids: string[] }>(

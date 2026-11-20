@@ -23,7 +23,7 @@ function isMoney(el: HTMLInputElement) {
 
 /**
  * Agrega los puntos de miles mientras se escribe, en todo campo con `data-money`
- * (cobro, pagos a barberos, precios, arriendo, montos fijos). El servidor ignora los puntos.
+ * (cobro, pagos a manicuristas, precios, arriendo, montos fijos). El servidor ignora los puntos.
  */
 export function MoneyInputs() {
   useEffect(() => {

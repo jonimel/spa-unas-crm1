@@ -6,7 +6,7 @@ import { requireUser } from '@/lib/auth'
 import { apptView } from '@/lib/booking'
 import { rows } from '@/lib/db'
 import { fmtPhone } from '@/lib/phone'
-import { fmtMoney, fmtTime, localParts } from '@/lib/time'
+import { fmtDuration, fmtMoney, fmtTime, localParts } from '@/lib/time'
 import { approveAction, cancelAction, noShowAction, rejectAction } from '../../actions'
 
 const UUID = /^[0-9a-f-]{36}$/i
@@ -28,7 +28,7 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
   const backTo = `/app/cita/${id}`
   // eslint-disable-next-line react-hooks/purity -- componente de servidor, se calcula por petición
   const canCharge = ['confirmed', 'pending'].includes(a.status) && new Date(a.starts_at).getTime() - Date.now() < 3 * 3600_000
-  const sourceLabel = { online: 'Reserva online', walkin: 'Cliente de paso', staff: 'Agendada en la barbería' }[a.source]
+  const sourceLabel = { online: 'Reserva online', walkin: 'Cliente de paso', staff: 'Agendada en el spa' }[a.source]
 
   return (
     <main>
@@ -46,6 +46,21 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
         </span>
       </Link>
 
+      {a.client_allergies && (
+        <div className="alert-allergy" role="note" style={{ marginTop: 10 }}>
+          <Icon name="alert" />
+          <div>
+            <b>Alergias y sensibilidades</b>
+            {a.client_allergies}
+          </div>
+        </div>
+      )}
+      {a.client_colors && (
+        <div className="note" style={{ marginTop: 10 }}>
+          <b>Colores favoritos:</b> {a.client_colors}
+        </div>
+      )}
+
       <div className="card" style={{ marginTop: 10 }}>
         <div className="kv">
           <span>Estado</span>
@@ -53,14 +68,23 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
             <StatusPill status={a.status} />
           </span>
         </div>
+        {a.lines.map((l, i) => (
+          <div className="kv" key={i}>
+            <span>{i === 0 ? (a.lines.length > 1 ? 'Servicios' : 'Servicio') : ''}</span>
+            <span>
+              {l.is_addon ? '+ ' : ''}
+              {l.name} · {l.duration_min} min · {fmtMoney(l.price)}
+            </span>
+          </div>
+        ))}
+        {a.lines.length > 1 && (
+          <div className="kv">
+            <span>Duración</span>
+            <span>{fmtDuration(a.duration_min)}</span>
+          </div>
+        )}
         <div className="kv">
-          <span>Servicio</span>
-          <span>
-            {a.service_name} · {a.duration_min} min
-          </span>
-        </div>
-        <div className="kv">
-          <span>Barbero</span>
+          <span>Manicurista</span>
           <span>{a.barber_name}</span>
         </div>
         <div className="kv">
@@ -74,7 +98,7 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
           </span>
         </div>
         <div className="kv">
-          <span>Precio</span>
+          <span>{a.lines.length > 1 ? 'Total' : 'Precio'}</span>
           <span>{fmtMoney(a.price)}</span>
         </div>
         <div className="kv">
@@ -167,7 +191,7 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
             {msgs.map((m, i) => (
               <div key={i}>
                 <div className="small muted" style={{ marginBottom: 4 }}>
-                  Para {m.to_kind === 'client' ? 'el cliente' : m.to_kind === 'barber' ? 'el barbero' : 'el dueño'} · {fmtTime(new Date(m.created_at), tz)}
+                  Para {m.to_kind === 'client' ? 'el cliente' : m.to_kind === 'barber' ? 'la manicurista' : 'el dueño'} · {fmtTime(new Date(m.created_at), tz)}
                   {m.status === 'simulated' ? ' · simulado' : m.status === 'failed' ? ' · falló' : ''}
                 </div>
                 <div className="bubble">{m.body}</div>

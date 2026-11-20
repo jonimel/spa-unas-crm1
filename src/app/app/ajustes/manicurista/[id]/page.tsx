@@ -8,7 +8,7 @@ import { saveBarber } from '../../../actions'
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
 
-export default async function Barbero({ params, searchParams }: PageProps<'/app/ajustes/barbero/[id]'>) {
+export default async function Manicurista({ params, searchParams }: PageProps<'/app/ajustes/manicurista/[id]'>) {
   const user = await requireUser('owner')
   const { id } = await params
   const sp = await searchParams
@@ -27,7 +27,7 @@ export default async function Barbero({ params, searchParams }: PageProps<'/app/
 
   return (
     <main>
-      <Top title={isNew ? 'Nuevo barbero' : b!.name} sub="Datos, acceso y horario" back="/app/ajustes" />
+      <Top title={isNew ? 'Nuevo manicurista' : b!.name} sub="Datos, acceso y horario" back="/app/ajustes" />
       <Flash err={sp.err as string} />
       <form action={saveBarber} className="stack" style={{ gap: 14, marginTop: 8 }}>
         <input type="hidden" name="id" value={b?.id ?? ''} />
@@ -61,7 +61,7 @@ export default async function Barbero({ params, searchParams }: PageProps<'/app/
         </div>
         {b && (
           <label className="row small">
-            <input type="checkbox" name="active" defaultChecked={b.active} /> Activo (aparece en reservas y puede entrar)
+            <input type="checkbox" name="active" defaultChecked={b.active} /> Activa (aparece en reservas y puede entrar)
           </label>
         )}
 

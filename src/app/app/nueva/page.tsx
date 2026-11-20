@@ -65,7 +65,7 @@ export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
 
         {user.role === 'owner' && (
           <div className="field">
-            <label htmlFor="barber">Barbero</label>
+            <label htmlFor="barber">Manicurista</label>
             <div className="in">
               <select id="barber" name="barber" required>
                 {barbers.map((b) => (
@@ -80,20 +80,44 @@ export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
         )}
 
         <div className="eyebrow" style={{ marginBottom: 0 }}>
-          Servicio
+          Servicios
         </div>
-        <div className="stack">
-          {services.map((s, i) => (
-            <label key={s.id} className="opt">
-              <input type="radio" name="service" value={s.id} defaultChecked={i === 0} />
-              <span className="grow">
-                <div className="t">{s.name}</div>
-                <div className="d">{fmtDuration(s.duration_min)}</div>
-              </span>
-              <span className="price">{fmtMoney(s.price)}</span>
-            </label>
-          ))}
+        <p className="small muted" style={{ margin: '-6px 2px 0' }}>
+          Puedes marcar varios (por ejemplo manos y pies). La duración y el precio son la suma.
+        </p>
+        <div className="stack" role="group" aria-label="Servicios">
+          {services
+            .filter((s) => !s.is_addon)
+            .map((s, i) => (
+              <label key={s.id} className="opt multi">
+                <input type="checkbox" name="service" value={s.id} defaultChecked={i === 0} />
+                <span className="grow">
+                  <div className="t">{s.name}</div>
+                  <div className="d">{fmtDuration(s.duration_min)}</div>
+                </span>
+                <span className="price">{fmtMoney(s.price)}</span>
+              </label>
+            ))}
         </div>
+        {services.some((s) => s.is_addon) && (
+          <>
+            <div className="svc-cat">Adicionales</div>
+            <div className="stack" role="group" aria-label="Adicionales">
+              {services
+                .filter((s) => s.is_addon)
+                .map((s) => (
+                  <label key={s.id} className="opt multi addon">
+                    <input type="checkbox" name="service" value={s.id} />
+                    <span className="grow">
+                      <div className="t">{s.name}</div>
+                      <div className="d">+{fmtDuration(s.duration_min)}</div>
+                    </span>
+                    <span className="price">+{fmtMoney(s.price)}</span>
+                  </label>
+                ))}
+            </div>
+          </>
+        )}
 
         <div className="eyebrow" style={{ marginBottom: 0 }}>
           Cliente

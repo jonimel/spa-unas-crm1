@@ -9,24 +9,24 @@ import { exportTenant, isShared } from '@/lib/backup'
 import { login } from '@/lib/auth'
 import { DEMO, showDemoLogins } from '@/lib/seed'
 
-const base = { shop: 'Barbería El Clásico', city: 'Cali', branch: '', address: 'Cl. 5 #40-12', owner: 'Ana Torres', phone: '3112223344', pin: '4321', pin2: '4321' }
+const base = { shop: 'Spa Uñas Divinas', city: 'Cali', branch: '', address: 'Cl. 5 #40-12', owner: 'Ana Torres', phone: '3112223344', pin: '4321', pin2: '4321' }
 
 beforeAll(async () => {
   await getDb()
 })
 
-describe('registrar una barbería', () => {
+describe('registrar un spa', () => {
   it('slug sin tildes ni símbolos', () => {
-    expect(slugify('Barbería Ñoño & Co.')).toBe('barberia-nono-y-co')
-    expect(slugify('***')).toBe('barberia')
+    expect(slugify('Spa Ñoño & Co.')).toBe('spa-nono-y-co')
+    expect(slugify('***')).toBe('spa')
   })
 
-  it('crea barbería, sede, dueño y servicios; el dueño entra con su celular', async () => {
+  it('crea spa, sede, dueño y servicios; el dueño entra con su celular', async () => {
     const r = await createShop(base)
-    expect(r.slug).toBe('barberia-el-clasico')
+    expect(r.slug).toBe('spa-unas-divinas')
     const branches = await rows<{ name: string }>('select name from branches where tenant_id = $1', [r.tenantId])
     expect(branches.map((b) => b.name)).toEqual(['Cali'])
-    expect((await rows('select 1 from services where tenant_id = $1', [r.tenantId])).length).toBe(3)
+    expect((await rows('select 1 from services where tenant_id = $1', [r.tenantId])).length).toBe(6)
     const o = await one<{ role: string }>('select role from users where id = $1', [r.ownerId])
     expect(o!.role).toBe('owner')
     expect(await login('311 222 3344', '4321')).toBe('ok')
@@ -34,7 +34,7 @@ describe('registrar una barbería', () => {
 
   it('el mismo nombre recibe otro link', async () => {
     const r = await createShop({ ...base, phone: '3112223345' })
-    expect(r.slug).toBe('barberia-el-clasico-2')
+    expect(r.slug).toBe('spa-unas-divinas-2')
   })
 
   it('no repite celular, valida PIN y nombre', async () => {
@@ -42,16 +42,16 @@ describe('registrar una barbería', () => {
     await expect(createShop({ ...base, phone: '3112223399', pin2: '1111' })).rejects.toThrow('no son iguales')
     await expect(createShop({ ...base, phone: '3112223399', pin: '12' , pin2: '12' })).rejects.toThrow('PIN')
     await expect(createShop({ ...base, phone: '12345' })).rejects.toThrow('no válido')
-    await expect(createShop({ ...base, phone: '3112223399', shop: ' ' })).rejects.toThrow('nombre de la barbería')
+    await expect(createShop({ ...base, phone: '3112223399', shop: ' ' })).rejects.toThrow('nombre del spa')
   })
 })
 
-describe('copias con varias barberías', () => {
-  it('la descarga del dueño trae solo su barbería y sin PIN', async () => {
+describe('copias con varios spas', () => {
+  it('la descarga del dueño trae solo su spa y sin PIN', async () => {
     expect(await isShared()).toBe(true)
     const demo = (await one<{ id: string }>('select id from tenants where slug = $1', [DEMO.slug]))!
     const { name, bytes } = await exportTenant(demo.id)
-    expect(name).toMatch(/^barbar-jpbarbar-.*\.json$/)
+    expect(name).toMatch(/^spa-bella-.*\.json$/)
     const data = JSON.parse(bytes.toString())
     const tenantIds = new Set<string>()
     for (const v of Object.values(data)) if (Array.isArray(v)) for (const row of v) tenantIds.add(row.tenant_id)

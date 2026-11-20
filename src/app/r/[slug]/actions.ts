@@ -11,7 +11,7 @@ export type BookingResult = { ok: true; id: string } | { ok: false; error: strin
 export async function requestBooking(input: {
   slug: string
   branchId: string
-  serviceId: string
+  serviceIds: string[]
   start: string
   barberId: string | null
   phone: string
@@ -19,7 +19,7 @@ export async function requestBooking(input: {
   note: string
 }): Promise<BookingResult> {
   const t = await tenantBySlug(input.slug)
-  if (!t) return { ok: false, error: 'Barbería no encontrada' }
+  if (!t) return { ok: false, error: 'Spa no encontrado' }
   const phone = normalizeCoPhone(input.phone)
   if (!phone) return { ok: false, error: 'Revisa el número: son 10 dígitos y empieza por 3.' }
   let name = input.name.trim().slice(0, 80)
@@ -35,14 +35,14 @@ export async function requestBooking(input: {
     [t.id, phone],
   )
   if (open && open.n >= MAX_PENDING)
-    return { ok: false, error: 'Ya tienes solicitudes esperando confirmación. Te escribimos por WhatsApp apenas el barbero responda.' }
+    return { ok: false, error: 'Ya tienes solicitudes esperando confirmación. Te escribimos por WhatsApp apenas la manicurista responda.' }
   const start = new Date(input.start)
   if (Number.isNaN(start.getTime())) return { ok: false, error: 'Elige una hora' }
   try {
     const id = await createAppointment({
       tenantId: t.id,
       branchId: input.branchId,
-      serviceId: input.serviceId,
+      serviceIds: Array.isArray(input.serviceIds) ? input.serviceIds.map(String).slice(0, 8) : [],
       start,
       barberId: input.barberId || null,
       clientName: name,

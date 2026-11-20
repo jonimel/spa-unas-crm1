@@ -16,7 +16,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
   const date = isYmd(sp.date) ? sp.date : today
   const owner = user.role === 'owner'
   const branchF = owner && typeof sp.sede === 'string' ? sp.sede : ''
-  const barberF = owner && typeof sp.barbero === 'string' ? sp.barbero : ''
+  const barberF = owner && typeof sp.manicurista === 'string' ? sp.manicurista : ''
 
   const branches = owner ? await rows<{ id: string; name: string }>('select id, name from branches where tenant_id = $1 and active order by sort', [user.tenant_id]) : []
   const barbers = owner
@@ -67,7 +67,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
   const isToday = date === today
   const active = day.filter((a) => a.status !== 'cancelled')
   const qs = (o: Record<string, string>) => {
-    const q = new URLSearchParams({ ...(branchF ? { sede: branchF } : {}), ...(barberF ? { barbero: barberF } : {}), date, ...o })
+    const q = new URLSearchParams({ ...(branchF ? { sede: branchF } : {}), ...(barberF ? { manicurista: barberF } : {}), date, ...o })
     for (const [k, v] of [...q.entries()]) if (!v) q.delete(k)
     return `/app/agenda?${q}`
   }
@@ -93,7 +93,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
       {alerts.map((al) => (
         <div key={al.id} className="alert" style={{ marginTop: 12 }}>
           <div className="t">
-            <Icon name="clock" /> Sin respuesta del barbero
+            <Icon name="clock" /> Sin respuesta de la manicurista
           </div>
           <div style={{ margin: '6px 0 10px', lineHeight: 1.45 }}>{al.title}</div>
           <div className="row">
@@ -124,25 +124,25 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
           <div className="eyebrow">Ver</div>
           {branches.length > 1 && (
             <div className="seg" style={{ marginBottom: 10 }}>
-              <Link href={qs({ sede: '', barbero: '' })} className={!branchF ? 'on' : ''}>
+              <Link href={qs({ sede: '', manicurista: '' })} className={!branchF ? 'on' : ''}>
                 Todas las sedes
               </Link>
               {branches.map((b) => (
-                <Link key={b.id} href={qs({ sede: b.id, barbero: '' })} className={branchF === b.id ? 'on' : ''}>
+                <Link key={b.id} href={qs({ sede: b.id, manicurista: '' })} className={branchF === b.id ? 'on' : ''}>
                   {b.name}
                 </Link>
               ))}
             </div>
           )}
           <div className="bfilter">
-            <Link href={qs({ barbero: '' })} className={'bchip' + (!barberF ? ' on' : '')}>
+            <Link href={qs({ manicurista: '' })} className={'bchip' + (!barberF ? ' on' : '')}>
               <span className="av any">
                 <Icon name="users" />
               </span>
               <span>Todos</span>
             </Link>
             {barbers.map((b) => (
-              <Link key={b.id} href={qs({ barbero: b.id })} className={'bchip' + (barberF === b.id ? ' on' : '')}>
+              <Link key={b.id} href={qs({ manicurista: b.id })} className={'bchip' + (barberF === b.id ? ' on' : '')}>
                 <Avatar name={b.name} />
                 <span>{firstName(b.name)}</span>
               </Link>
@@ -190,7 +190,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
             return (
               <div key={a.id}>
                 {showNow && <div className="nowline">Ahora · {fmtTime(now, tz)}</div>}
-                <Link href={`/app/cita/${a.id}`} className={'ap tap' + (['completed', 'cancelled', 'no_show'].includes(a.status) ? ' done' : '') + (inProgress ? ' now' : '')}>
+                <Link href={`/app/cita/${a.id}`} className={`ap tap is-${a.status}` + (['completed', 'cancelled', 'no_show'].includes(a.status) ? ' done' : '') + (inProgress ? ' now' : '')}>
                   <div className="h">
                     {a.time}
                     <small>{a.duration_min} min</small>
@@ -204,6 +204,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
                         {owner && !branchF && branches.length > 1 ? ` · ${a.branch_name}` : ''}
                       </div>
                       {a.client_note && <div className="small" style={{ marginTop: 3 }}>“{a.client_note}”</div>}
+                      <Allergy text={a.client_allergies} />
                     </div>
                     <div className="right">
                       <StatusPill status={a.status} />
@@ -217,6 +218,21 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
         </div>
       )}
     </main>
+  )
+}
+
+/** Alergia de la clienta, bien visible para la manicurista. */
+function Allergy({ text }: { text: string | null }) {
+  if (!text) return null
+  return (
+    <div style={{ marginTop: 5 }}>
+      <span className="flag-allergy">
+        <Icon name="alert" /> Alergia
+      </span>
+      <div className="small" style={{ color: 'var(--warn)', lineHeight: 1.4, marginTop: 3 }}>
+        {text}
+      </div>
+    </div>
   )
 }
 
@@ -246,6 +262,7 @@ function PendingCard({ a, now, owner, backTo }: { a: ApptView; now: Date; owner:
             {owner ? ` · ${firstName(a.barber_name)}` : ''}
           </div>
           {a.client_note && <div className="small" style={{ marginTop: 3 }}>“{a.client_note}”</div>}
+          <Allergy text={a.client_allergies} />
         </div>
       </Link>
       <div className="row" style={{ marginTop: 12 }}>

@@ -12,8 +12,8 @@ import { closeBranch, logoutAction, reopenBranch, saveBranch, saveService } from
 export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'>) {
   const user = await requireUser('owner')
   const sp = await searchParams
-  const services = await rows<{ id: string; name: string; description: string | null; duration_min: number; price: number; active: boolean }>(
-    'select id, name, description, duration_min, price, active from services where tenant_id = $1 order by sort, name',
+  const services = await rows<Svc>(
+    'select id, name, description, duration_min, price, active, is_addon, refill_days from services where tenant_id = $1 order by is_addon, sort, name',
     [user.tenant_id],
   )
   const allBranches = await rows<{ id: string; name: string; address: string | null; active: boolean }>(
@@ -23,7 +23,7 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
   const branches = allBranches.filter((b) => b.active)
   const shared = await isShared()
   const last = listBackups()[0]
-  const lastBackup = last?.replace(/^barbar-(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\.tar\.gz$/, '$3/$2/$1 $4:$5')
+  const lastBackup = last?.replace(/^(?:spa|barbar)-(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\.tar\.gz$/, '$3/$2/$1 $4:$5')
   const closed = allBranches.filter((b) => !b.active)
   const barbers = await rows<{ id: string; name: string; phone: string; active: boolean; branch: string | null }>(
     `select u.id, u.name, u.phone, u.active, b.name branch from users u left join branches b on b.id = u.branch_id
@@ -51,16 +51,16 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
         </p>
       </div>
 
-      <div className="eyebrow">Entrada de los barberos</div>
+      <div className="eyebrow">Entrada de las manicuristas</div>
       <div className="card">
         <div className="row">
-          <Icon name="sc" style={{ color: 'var(--brass)' }} />
+          <Icon name="polish" style={{ color: 'var(--brass)' }} />
           <a className="grow link" href={teamLink} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all' }}>
             {teamLink}
           </a>
         </div>
         <p className="small muted" style={{ margin: '8px 0 0' }}>
-          Mándaselo solo a tu equipo. Cada barbero entra con su celular y el PIN que le asignas. No lo compartas con clientes.
+          Mándaselo solo a tu equipo. Cada manicurista entra con su celular y el PIN que le asignas. No lo compartas con clientes.
         </p>
       </div>
 
@@ -76,41 +76,48 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
         <Icon name="back" style={{ transform: 'scaleX(-1)', color: 'var(--muted)' }} />
       </Link>
 
-      <div className="eyebrow">Barberos</div>
+      <div className="eyebrow">Manicuristas</div>
       <div className="list card" style={{ padding: '2px 14px' }}>
         {barbers.map((b) => (
-          <Link key={b.id} href={`/app/ajustes/barbero/${b.id}`} className="li" style={{ opacity: b.active ? 1 : 0.5 }}>
+          <Link key={b.id} href={`/app/ajustes/manicurista/${b.id}`} className="li" style={{ opacity: b.active ? 1 : 0.5 }}>
             <Avatar name={b.name} sm />
             <div className="grow">
               <div className="t">{b.name}</div>
               <div className="small muted">
                 {fmtPhone(b.phone)} · {b.branch ?? 'sin sede'}
-                {b.active ? '' : ' · inactivo'}
+                {b.active ? '' : ' · inactiva'}
               </div>
             </div>
             <Icon name="back" style={{ transform: 'scaleX(-1)', color: 'var(--muted)' }} />
           </Link>
         ))}
       </div>
-      <Link className="btn ghost sm" href="/app/ajustes/barbero/nuevo" style={{ marginTop: 10 }}>
-        <Icon name="plus" /> Agregar barbero
+      <Link className="btn ghost sm" href="/app/ajustes/manicurista/nuevo" style={{ marginTop: 10 }}>
+        <Icon name="plus" /> Agregar manicurista
       </Link>
 
       <div className="eyebrow">Servicios</div>
+      <p className="small muted" style={{ margin: '0 2px 10px' }}>
+        La clienta puede reservar varios en una misma cita. Los <b>adicionales</b> (retiro, nail art, reparación…) se ofrecen después de elegir los servicios.
+      </p>
       <div className="stack">
-        {services.map((s) => (
-          <details key={s.id} className="more card">
-            <summary className="row">
-              <div className="grow" style={{ opacity: s.active ? 1 : 0.5 }}>
-                <b>{s.name}</b>
-                <div className="small muted">
-                  {s.duration_min} min{s.active ? '' : ' · oculto'}
+        {services.map((s, i) => (
+          <div key={s.id}>
+            {s.is_addon && !services[i - 1]?.is_addon && <div className="svc-cat">Adicionales</div>}
+            <details className="more card">
+              <summary className="row">
+                <div className="grow" style={{ opacity: s.active ? 1 : 0.5 }}>
+                  <b>{s.name}</b>
+                  <div className="small muted">
+                    {s.duration_min} min{s.refill_days ? ` · retoque a los ${s.refill_days} días` : ''}
+                    {s.active ? '' : ' · oculto'}
+                  </div>
                 </div>
-              </div>
-              <span className="price">{fmtMoney(s.price)}</span>
-            </summary>
-            <ServiceForm s={s} />
-          </details>
+                <span className="price">{fmtMoney(s.price)}</span>
+              </summary>
+              <ServiceForm s={s} />
+            </details>
+          </div>
         ))}
         <details className="more card">
           <summary className="row">
@@ -141,7 +148,7 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
                 <form action={closeBranch} className="stack" style={{ marginTop: 8 }}>
                   <input type="hidden" name="id" value={b.id} />
                   <p className="small muted" style={{ margin: 0 }}>
-                    Deja de aparecer en las reservas y en la agenda. Lo que pasó en esta sede sigue en los reportes. Antes hay que pasar sus barberos a otra
+                    Deja de aparecer en las reservas y en la agenda. Lo que pasó en esta sede sigue en los reportes. Antes hay que pasar sus manicuristas a otra
                     sede y cancelar sus citas próximas.
                   </p>
                   <button className="btn no sm">Sí, cerrar {b.name}</button>
@@ -206,7 +213,9 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
   )
 }
 
-function ServiceForm({ s }: { s?: { id: string; name: string; description: string | null; duration_min: number; price: number; active: boolean } }) {
+type Svc = { id: string; name: string; description: string | null; duration_min: number; price: number; active: boolean; is_addon: boolean; refill_days: number | null }
+
+function ServiceForm({ s }: { s?: Svc }) {
   return (
     <form action={saveService} className="stack" style={{ marginTop: 12 }}>
       <input type="hidden" name="id" value={s?.id ?? ''} />
@@ -236,6 +245,16 @@ function ServiceForm({ s }: { s?: { id: string; name: string; description: strin
           </div>
         </div>
       </div>
+      <div className="field">
+        <label>Recordar retoque a los (días)</label>
+        <div className="in">
+          <input name="refill_days" type="number" min={1} max={365} defaultValue={s?.refill_days ?? ''} placeholder="Sin recordatorio" />
+        </div>
+        <div className="hint">Al cobrar, se le escribe a la clienta por WhatsApp cuando le toca el retoque (si no ha vuelto a reservar). Ej.: semipermanente 15, acrílico 21.</div>
+      </div>
+      <label className="row small">
+        <input type="checkbox" name="is_addon" defaultChecked={s?.is_addon ?? false} /> Es un adicional (retiro, nail art, reparación…)
+      </label>
       {s && (
         <label className="row small">
           <input type="checkbox" name="active" defaultChecked={s.active} /> Visible para reservar

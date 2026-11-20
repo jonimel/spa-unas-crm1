@@ -28,7 +28,7 @@ export const LOCK_MINUTES = 10
 /** 'pick': la entrada común de la demo calzó con varios usuarios; se elige cuál en /entrar/elegir. */
 export type LoginResult = 'ok' | 'bad' | 'locked' | 'pick'
 
-/** Usuarios de la demo que abre la entrada común 1111 / 1111, según la puerta elegida (dueño o barbero). */
+/** Usuarios de la demo que abre la entrada común 1111 / 1111, según la puerta elegida (dueño o manicurista). */
 async function demoUsers(pin: string, role: Role) {
   if (!demoLoginEnabled() || pin !== DEMO.login.pin) return []
   return rows<{ id: string }>(

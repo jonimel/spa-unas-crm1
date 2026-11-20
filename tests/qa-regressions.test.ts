@@ -25,7 +25,7 @@ beforeAll(async () => {
   await getDb()
   t = (await tenantBySlug(DEMO.slug))!
   branchId = (await one<{ id: string }>(`select id from branches where tenant_id = $1 and active order by sort limit 1`, [t.id]))!.id
-  serviceId = (await one<{ id: string }>(`select id from services where tenant_id = $1 and name = 'Barba'`, [t.id]))!.id
+  serviceId = (await one<{ id: string }>(`select id from services where tenant_id = $1 and name = 'Manicure tradicional'`, [t.id]))!.id
   ymd = addDaysYmd(todayYmd(t.timezone), 8)
   while (weekdayOf(ymd) === 0) ymd = addDaysYmd(ymd, 1)
   const o = (await one<CurrentUser>(`select id, tenant_id, role, name, phone, branch_id from users where phone = $1`, [DEMO.owner.phone]))!
@@ -37,20 +37,20 @@ const staff = (start: Date, barber: string) =>
   createAppointment({ tenantId: t.id, branchId, serviceId, start, barberId: barber, clientName: 'QA', clientPhone: null, source: 'staff' })
 
 describe('QA: citas que agenda el equipo', () => {
-  it('no acepta un barbero de otra barbería', async () => {
+  it('no acepta una manicurista de otro spa', async () => {
     const t2 = (await one<{ id: string }>(`insert into tenants (slug, name, timezone) values ('qa-otra', 'Otra', 'America/Bogota') returning id`))!.id
     const b2 = (await one<{ id: string }>(`insert into branches (tenant_id, name) values ($1, 'X') returning id`, [t2]))!.id
     const ajeno = (await one<{ id: string }>(
       `insert into users (tenant_id, role, name, phone, pin_hash, branch_id) values ($1, 'barber', 'Ajeno', '3009999998', 'x', $2) returning id`,
       [t2, b2],
     ))!.id
-    await expect(staff(atLocal(ymd, 9 * 60, t.timezone), ajeno)).rejects.toThrow('Barbero no disponible')
+    await expect(staff(atLocal(ymd, 9 * 60, t.timezone), ajeno)).rejects.toThrow('Manicurista no disponible')
   })
 
-  it('no acepta un barbero desactivado', async () => {
+  it('no acepta una manicurista desactivado', async () => {
     await one(`update users set active = false where id = $1`, [barberId])
     try {
-      await expect(staff(atLocal(ymd, 8 * 60, t.timezone), barberId)).rejects.toThrow('Barbero no disponible')
+      await expect(staff(atLocal(ymd, 8 * 60, t.timezone), barberId)).rejects.toThrow('Manicurista no disponible')
     } finally {
       await one(`update users set active = true where id = $1`, [barberId])
     }
@@ -69,7 +69,7 @@ describe('QA: dos toques a la vez', () => {
   })
 
   it('confirmar y cancelar a la vez: gana uno y el cliente recibe un solo mensaje', async () => {
-    const slots = await slotsFor(t, { branchId, durationMin: 30, ymd })
+    const slots = await slotsFor(t, { branchId, durationMin: 45, ymd })
     const s = slots[slots.length - 1]
     const id = await createAppointment({ tenantId: t.id, branchId, serviceId, start: s.start, barberId: s.barberIds[0], clientName: 'QA Carrera', clientPhone: '3190000077', source: 'online' })
     const res = await Promise.allSettled([cancel(owner, id), approve(owner, id)])
@@ -83,18 +83,23 @@ describe('QA: dos toques a la vez', () => {
 describe('QA: reserva online', () => {
   it('máximo 3 solicitudes pendientes por celular', async () => {
     const phone = '3170000123'
-    const slots = (await slotsFor(t, { branchId, durationMin: 30, ymd: addDaysYmd(ymd, 1) })).filter((s) => s.barberIds.length)
+    let day = addDaysYmd(ymd, 1)
+    while (weekdayOf(day) === 0) day = addDaysYmd(day, 1)
+    const slots = (await slotsFor(t, { branchId, durationMin: 45, ymd: day })).filter((s) => s.barberIds.length)
     const results = []
-    for (const s of slots.slice(0, 4))
-      results.push(await requestBooking({ slug: t.slug, branchId, serviceId, start: s.start.toISOString(), barberId: null, phone, name: 'QA Spam', note: '' }))
-    expect(results.slice(0, 3).every((r) => r.ok)).toBe(true)
+    // horas separadas (cada reserva dura 45 min y ocupa a una manicurista)
+    const apart: typeof slots = []
+    for (const s of slots) if (!apart.length || s.minutes - apart[apart.length - 1].minutes >= 60) apart.push(s)
+    for (const s of apart.slice(0, 4))
+      results.push(await requestBooking({ slug: t.slug, branchId, serviceIds: [serviceId], start: s.start.toISOString(), barberId: null, phone, name: 'QA Spam', note: '' }))
+    expect(results.slice(0, 3), JSON.stringify(results)).toEqual([{ ok: true, id: expect.any(String) }, { ok: true, id: expect.any(String) }, { ok: true, id: expect.any(String) }])
     expect(results[3]).toMatchObject({ ok: false })
   })
 })
 
 describe('QA: textos de WhatsApp', () => {
   it('sin punto doble después de "p. m."', () => {
-    const txt = render('barbero_nueva_solicitud', { barbero: 'Julián', cliente: 'Ana', servicio: 'Barba', fecha: 'Mié 18 de nov', hora: '7:00 p. m.', limite: '6:30 p. m.' })
+    const txt = render('manicurista_nueva_solicitud', { manicurista: 'Mariana', cliente: 'Ana', servicio: 'Manicure tradicional', fecha: 'Mié 18 de nov', hora: '7:00 p. m.', limite: '6:30 p. m.' })
     expect(txt).not.toContain('m..')
     expect(txt).toContain('7:00 p. m. Apruébala')
     expect(txt.endsWith('6:30 p. m.')).toBe(true)

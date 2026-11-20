@@ -7,7 +7,7 @@ import { currentUser, startSession } from '@/lib/auth'
 import { BookingError } from '@/lib/booking'
 import { createShop } from '@/lib/signup'
 
-export const metadata = { title: 'Registra tu barbería · Barbar' }
+export const metadata = { title: 'Registra tu spa · Spa Uñas CRM' }
 
 const KEEP = ['shop', 'city', 'branch', 'address', 'owner', 'phone'] as const
 
@@ -27,7 +27,7 @@ async function register(fd: FormData) {
     throw e
   }
   await startSession(ownerId)
-  redirect(`/app/ajustes?ok=${encodeURIComponent('¡Listo! Tu barbería está creada. Ahora agrega a tus barberos con su horario y revisa los servicios y precios.')}`)
+  redirect(`/app/ajustes?ok=${encodeURIComponent('¡Listo! Tu spa está creado. Ahora agrega a tus manicuristas con su horario y revisa los servicios y precios.')}`)
 }
 
 export default async function Registro({ searchParams }: PageProps<'/registro'>) {
@@ -41,23 +41,23 @@ export default async function Registro({ searchParams }: PageProps<'/registro'>)
         <div className="tt brand">
           <ShopMark size={38} />
           <div>
-            <b>Barbar</b>
-            <span>Agenda para barberías</span>
+            <b>Spa Uñas</b>
+            <span>Agenda para spas de uñas</span>
           </div>
         </div>
       </div>
       <h2 className="hero-title" style={{ fontSize: 38 }}>
-        Registra tu <em>barbería</em>
+        Registra tu <em>spa</em>
       </h2>
       <p className="muted small" style={{ lineHeight: 1.5 }}>
-        En un minuto tienes tu link de reservas, la agenda de cada barbero y los cobros. Sin descargar nada.
+        En un minuto tienes tu link de reservas, la agenda de cada manicurista y los cobros. Sin descargar nada.
       </p>
       <form action={register} className="stack" style={{ gap: 14, marginTop: 6 }}>
-        <div className="eyebrow">La barbería</div>
+        <div className="eyebrow">El spa</div>
         <div className="field">
-          <label htmlFor="shop">Nombre de la barbería</label>
+          <label htmlFor="shop">Nombre del spa</label>
           <div className="in">
-            <input id="shop" name="shop" defaultValue={val('shop')} placeholder="Ej.: Barbería El Clásico" minLength={2} maxLength={60} required autoComplete="organization" />
+            <input id="shop" name="shop" defaultValue={val('shop')} placeholder="Ej.: Spa Uñas Divinas" minLength={2} maxLength={60} required autoComplete="organization" />
           </div>
         </div>
         <div className="field">
@@ -103,7 +103,7 @@ export default async function Registro({ searchParams }: PageProps<'/registro'>)
         </div>
         <Flash err={err} />
         <button className="btn" type="submit">
-          Crear mi barbería
+          Crear mi spa
         </button>
         <p className="small muted">
           ¿Ya tienes cuenta? <Link href="/entrar/dueno">Entrar como dueño</Link>

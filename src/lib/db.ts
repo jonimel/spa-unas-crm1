@@ -12,15 +12,17 @@ import { PGlite, type Transaction } from '@electric-sql/pglite'
 type Db = PGlite
 type Queryable = Pick<PGlite, 'query'> | Transaction
 
-const g = globalThis as unknown as { __barbarDb?: Promise<Db> }
+const g = globalThis as unknown as { __spaDb?: Promise<Db> }
 
 // En Railway los datos van en el volumen (disco permanente); Railway da su ruta en RAILWAY_VOLUME_MOUNT_PATH.
 const VOLUME = process.env.RAILWAY_VOLUME_MOUNT_PATH
-export const DATA_DIR = process.env.BARBAR_DATA_DIR ?? (VOLUME ? path.join(VOLUME, 'pg') : path.join(process.cwd(), '.data', 'pg'))
+// SPA_DATA_DIR (antes BARBAR_DATA_DIR, que se sigue aceptando)
+const DATA_ENV = process.env.SPA_DATA_DIR ?? process.env.BARBAR_DATA_DIR
+export const DATA_DIR = DATA_ENV ?? (VOLUME ? path.join(VOLUME, 'pg') : path.join(process.cwd(), '.data', 'pg'))
 
 async function open(): Promise<Db> {
   // En Railway, sin volumen el disco se borra en cada actualización: mejor no arrancar que perder las citas.
-  if (process.env.RAILWAY_ENVIRONMENT && !VOLUME && !process.env.BARBAR_DATA_DIR) {
+  if (process.env.RAILWAY_ENVIRONMENT && !VOLUME && !DATA_ENV) {
     throw new Error('Falta el volumen en Railway: agrega un Volume a este servicio con Mount path /data y vuelve a desplegar.')
   }
   return openDb()
@@ -35,7 +37,7 @@ async function openDb(): Promise<Db> {
   await upgradeDemoLogins(db)
   // la demo siempre con agenda de hoy y de los próximos días
   const { topUpDemo } = await import('./demo-fill')
-  await topUpDemo(db).catch((e) => console.error('[barbar] demo:', e))
+  await topUpDemo(db).catch((e) => console.error('[spa] demo:', e))
   // pagos sin repartición (de antes de la fase 2 o recién sembrados): calcular comisión
   const { settlePending } = await import('./payroll')
   await settlePending(db)
@@ -59,20 +61,20 @@ export async function migrate(db: Db) {
 
 /** Cierra la base (guarda todo en disco) antes de apagar el servidor. */
 export async function shutdown() {
-  const pending = g.__barbarDb
+  const pending = g.__spaDb
   if (!pending) return
   const db = await pending.catch(() => null)
   if (db && !db.closed) await db.close()
 }
 
 export function getDb(): Promise<Db> {
-  if (!g.__barbarDb) {
-    g.__barbarDb = open().catch((e) => {
-      g.__barbarDb = undefined
+  if (!g.__spaDb) {
+    g.__spaDb = open().catch((e) => {
+      g.__spaDb = undefined
       throw e
     })
   }
-  return g.__barbarDb
+  return g.__spaDb
 }
 
 export async function rows<T>(sql: string, params: unknown[] = [], on?: Queryable): Promise<T[]> {

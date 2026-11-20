@@ -13,13 +13,13 @@ export type TemplateName = keyof Templates
 export const TEMPLATES = {
   solicitud_recibida: {
     to: 'client',
-    params: ['nombre', 'barberia', 'servicio', 'fecha', 'hora', 'barbero'],
-    text: 'Hola {nombre} 👋 Recibimos tu solicitud en {barberia}: {servicio} el {fecha} a las {hora} con {barbero}. Te confirmamos por aquí en máximo 2 horas.',
+    params: ['nombre', 'spa', 'servicio', 'fecha', 'hora', 'manicurista'],
+    text: 'Hola {nombre} 👋 Recibimos tu solicitud en {spa}: {servicio} el {fecha} a las {hora} con {manicurista}. Te confirmamos por aquí en máximo 2 horas.',
   },
   cita_confirmada: {
     to: 'client',
-    params: ['nombre', 'fecha', 'hora', 'barbero', 'sede', 'direccion'],
-    text: '¡Listo, {nombre}! ✅ Tu cita quedó confirmada para el {fecha} a las {hora} con {barbero} en la sede {sede} ({direccion}). Si necesitas cambiarla, responde a este mensaje.',
+    params: ['nombre', 'fecha', 'hora', 'manicurista', 'sede', 'direccion'],
+    text: '¡Listo, {nombre}! ✅ Tu cita quedó confirmada para el {fecha} a las {hora} con {manicurista} en la sede {sede} ({direccion}). Si necesitas cambiarla, responde a este mensaje.',
   },
   cita_rechazada: {
     to: 'client',
@@ -29,22 +29,27 @@ export const TEMPLATES = {
   cita_cancelada: {
     to: 'client',
     params: ['nombre', 'fecha', 'hora', 'link'],
-    text: 'Hola {nombre}, tu cita del {fecha} a las {hora} fue cancelada por la barbería. Disculpa la molestia. Para reservar de nuevo: {link}',
+    text: 'Hola {nombre}, tu cita del {fecha} a las {hora} fue cancelada por el spa. Disculpa la molestia. Para reservar de nuevo: {link}',
   },
   recordatorio: {
     to: 'client',
-    params: ['nombre', 'hora', 'barbero', 'sede'],
-    text: 'Hola {nombre} ✂️ Te recordamos tu cita de hoy a las {hora} con {barbero} en la sede {sede}. ¡Te esperamos!',
+    params: ['nombre', 'hora', 'manicurista', 'sede'],
+    text: 'Hola {nombre} 💅 Te recordamos tu cita de hoy a las {hora} con {manicurista} en la sede {sede}. ¡Te esperamos!',
   },
-  barbero_nueva_solicitud: {
+  retoque: {
+    to: 'client',
+    params: ['nombre', 'spa', 'servicio', 'dias', 'link'],
+    text: 'Hola {nombre} 💅 ¡Es hora de tu retoque! Ya van {dias} días desde tu {servicio} en {spa}. Reserva tu próxima cita aquí: {link}',
+  },
+  manicurista_nueva_solicitud: {
     to: 'barber',
-    params: ['barbero', 'cliente', 'servicio', 'fecha', 'hora', 'limite'],
-    text: '{barbero}, tienes una nueva solicitud: {cliente} · {servicio} · {fecha} {hora}. Apruébala en la app antes de las {limite}.',
+    params: ['manicurista', 'cliente', 'servicio', 'fecha', 'hora', 'limite'],
+    text: '{manicurista}, tienes una nueva solicitud: {cliente} · {servicio} · {fecha} {hora}. Apruébala en la app antes de las {limite}.',
   },
   dueno_sin_respuesta: {
     to: 'owner',
-    params: ['barbero', 'cliente', 'fecha', 'hora'],
-    text: '⚠️ {barbero} no respondió a tiempo la solicitud de {cliente} para el {fecha} a las {hora}. Revísala en el panel.',
+    params: ['manicurista', 'cliente', 'fecha', 'hora'],
+    text: '⚠️ {manicurista} no respondió a tiempo la solicitud de {cliente} para el {fecha} a las {hora}. Revísala en el panel.',
   },
 } as const satisfies Record<string, { to: 'client' | 'barber' | 'owner'; params: readonly string[]; text: string }>
 

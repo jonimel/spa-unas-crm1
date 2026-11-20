@@ -18,7 +18,7 @@ export default async function Clientes({ searchParams }: PageProps<'/app/cliente
     filter = `and (lower(c.name) like $2${digits.length >= 3 ? ` or c.phone like $3` : ''})`
     if (digits.length >= 3) params.push(`%${digits}%`)
   }
-  // el barbero ve todos los clientes de la barbería (para reconocer a quien llega), pero sin montos
+  // la manicurista ve todos los clientes del spa (para reconocer a quien llega), pero sin montos
   const list = await rows<{ id: string; name: string; phone: string | null; visits: number; last: Date | null }>(
     `select c.id, c.name, c.phone,
             count(a.id) filter (where a.status = 'completed')::int visits,

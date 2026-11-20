@@ -8,10 +8,10 @@ import { PGlite } from '@electric-sql/pglite'
 
 const root = process.cwd()
 const volume = process.env.RAILWAY_VOLUME_MOUNT_PATH
-const backups = process.env.BARBAR_BACKUP_DIR ?? (volume ? path.join(volume, 'backups') : path.join(root, 'backups'))
+const backups = process.env.SPA_BACKUP_DIR ?? process.env.BARBAR_BACKUP_DIR ?? (volume ? path.join(volume, 'backups') : path.join(root, 'backups'))
 let file = process.argv[2]
 if (!file) {
-  const all = fs.existsSync(backups) ? fs.readdirSync(backups).filter((f) => /^barbar-.*\.tar\.gz$/.test(f)).sort() : []
+  const all = fs.existsSync(backups) ? fs.readdirSync(backups).filter((f) => /^(spa|barbar)-.*\.tar\.gz$/.test(f)).sort((a, b) => a.replace(/^\w+-/, '').localeCompare(b.replace(/^\w+-/, ''))) : []
   if (!all.length) {
     console.log('No hay copias en la carpeta backups/.')
     process.exit(1)
@@ -23,7 +23,7 @@ if (!fs.existsSync(file)) {
   process.exit(1)
 }
 
-const dataDir = process.env.BARBAR_DATA_DIR ?? (volume ? path.join(volume, 'pg') : path.join(root, '.data', 'pg'))
+const dataDir = process.env.SPA_DATA_DIR ?? process.env.BARBAR_DATA_DIR ?? (volume ? path.join(volume, 'pg') : path.join(root, '.data', 'pg'))
 if (fs.existsSync(dataDir)) {
   const keep = path.join(path.dirname(dataDir), `pg-antes-de-restaurar-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}`)
   try {

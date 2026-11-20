@@ -5,9 +5,9 @@ import { rows } from '@/lib/db'
 
 export const metadata = { title: 'Reservar una cita' }
 
-// Pantalla solo para clientes: buscar la barbería y pasar a su link de reservas (/r/<slug>).
+// Pantalla solo para clientes: buscar el spa y pasar a su link de reservas (/r/<slug>).
 // Aquí no hay nada del equipo (ni entrar, ni PIN), para que el cliente no se confunda.
-// Solo salen barberías que de verdad pueden recibir reservas: con un servicio activo y un barbero con horario.
+// Solo salen spas que de verdad pueden recibir reservas: con un servicio activo y una manicurista con horario.
 const LIMIT = 30
 
 export default async function Reservar({ searchParams }: PageProps<'/reservar'>) {
@@ -35,11 +35,11 @@ export default async function Reservar({ searchParams }: PageProps<'/reservar'>)
         Reservar <em>una cita</em>
       </h2>
       <p className="muted" style={{ lineHeight: 1.5, marginTop: -4 }}>
-        Busca tu barbería y elige servicio, barbero y hora. No necesitas cuenta.
+        Busca tu spa y elige servicio, manicurista y hora. No necesitas cuenta.
       </p>
 
       <form className="field" role="search" style={{ marginTop: 14 }}>
-        <label htmlFor="q">Tu barbería</label>
+        <label htmlFor="q">Tu spa</label>
         <div className="in">
           <Icon name="search" style={{ color: 'var(--muted)' }} />
           <input id="q" name="q" type="search" defaultValue={q} placeholder="Nombre o ciudad" autoComplete="off" enterKeyHint="search" />
@@ -59,14 +59,14 @@ export default async function Reservar({ searchParams }: PageProps<'/reservar'>)
         ))}
         {shops.length === 0 && (
           <div className="card small muted" style={{ textAlign: 'center' }}>
-            {q ? `No encontramos barberías con «${q}». Revisa el nombre o pídele el link a tu barbería.` : 'Todavía no hay barberías recibiendo reservas.'}
+            {q ? `No encontramos spas con «${q}». Revisa el nombre o pídele el link a tu spa.` : 'Todavía no hay spas recibiendo reservas.'}
           </div>
         )}
-        {more && <p className="small muted">Hay más barberías. Escribe el nombre para encontrar la tuya.</p>}
+        {more && <p className="small muted">Hay más spas. Escribe el nombre para encontrar el tuyo.</p>}
       </div>
 
       <p className="small muted" style={{ marginTop: 22, lineHeight: 1.5 }}>
-        ¿Tu barbería te mandó un link? Ábrelo directo y reservas en segundos.
+        ¿Tu spa te mandó un link? Ábrelo directo y reservas en segundos.
       </p>
     </main>
   )

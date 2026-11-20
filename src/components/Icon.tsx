@@ -1,4 +1,5 @@
-// Íconos (mismo set del prototipo). Uso: <Icon name="cal" />
+// Íconos de trazo (24×24, 1.7px). Uso: <Icon name="cal" />
+// Los del spa: polish (esmalte, para el equipo / manicurista), nail, hand, sparkle, heart, drop, gift, leaf, alert.
 const PATHS: Record<string, string> = {
   back: '<path d="M15 18l-6-6 6-6"/>',
   cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>',
@@ -23,6 +24,15 @@ const PATHS: Record<string, string> = {
   layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
+  polish: '<path d="M10 2.8h4a1 1 0 011 1V9h-6V3.8a1 1 0 011-1z"/><path d="M8.5 9h7v2.2"/><path d="M8.5 11.2c-2 .9-3 2.6-3 4.8v1.5A3.5 3.5 0 009 21h6a3.5 3.5 0 003.5-3.5V16c0-2.2-1-3.9-3-4.8z"/><path d="M8.8 15.2c.4-.9 1-1.4 1.8-1.7"/>',
+  nail: '<path d="M7 21v-9.5C7 6.3 9.2 3 12 3s5 3.3 5 8.5V21"/><path d="M9.5 13c0-3.3 1-5.6 2.5-5.6s2.5 2.3 2.5 5.6v2.5h-5z"/>',
+  hand: '<path d="M8 12V5.5a1.5 1.5 0 013 0V11"/><path d="M11 10.5V4a1.5 1.5 0 013 0v6.5"/><path d="M14 10.5V5.5a1.5 1.5 0 013 0V13"/><path d="M17 9.5a1.5 1.5 0 013 0V14a7 7 0 01-7 7h-1a6 6 0 01-4.6-2.2L4 15.6a1.6 1.6 0 012.4-2.1L8 15"/>',
+  sparkle: '<path d="M11 3l1.7 5.3L18 10l-5.3 1.7L11 17l-1.7-5.3L4 10l5.3-1.7z"/><path d="M18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.2a4.3 4.3 0 017.5 2.6C19.5 15.4 12 20 12 20z"/>',
+  drop: '<path d="M12 3.5s6 6.4 6 10.8a6 6 0 01-12 0C6 9.9 12 3.5 12 3.5z"/><path d="M9.2 14.6a3 3 0 002.3 2.6"/>',
+  gift: '<rect x="3.5" y="8.5" width="17" height="4" rx="1.2"/><path d="M5 12.5V20a1 1 0 001 1h12a1 1 0 001-1v-7.5M12 8.5V21"/><path d="M12 8.5C10.5 5 7 4.6 7 6.6c0 1.6 2.5 1.9 5 1.9zM12 8.5c1.5-3.5 5-3.9 5-1.9 0 1.6-2.5 1.9-5 1.9z"/>',
+  leaf: '<path d="M5 19c0-8 5-13.5 15-14-0.3 9.8-5.8 15-14 15z"/><path d="M5 19c2.5-4.5 5.5-7.5 9-9.5"/>',
+  alert: '<path d="M10.3 4.2L2.8 17.5A2 2 0 004.5 20.5h15a2 2 0 001.7-3L13.7 4.2a2 2 0 00-3.4 0z"/><path d="M12 9.5v4.5M12 17.2v.01"/>',
 }
 
 export type IconName = keyof typeof PATHS

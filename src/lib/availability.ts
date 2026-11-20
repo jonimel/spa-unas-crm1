@@ -5,7 +5,7 @@ export type BarberDay = {
   id: string
   /** bloques de trabajo de ese día en esa sede, en minutos locales */
   hours: { start_min: number; end_min: number }[]
-  /** citas activas y ausencias del barbero ese día */
+  /** citas activas y ausencias de la manicurista ese día */
   busy: Interval[]
 }
 export type Slot = { start: Date; end: Date; minutes: number; barberIds: string[] }
@@ -23,7 +23,7 @@ export type SlotInput = {
 const overlaps = (a: Interval, b: Interval) => a.start < b.end && b.start < a.end
 
 /**
- * Horas libres de un día: para cada hora (cada `stepMin`), qué barberos pueden atender
+ * Horas libres de un día: para cada hora (cada `stepMin`), qué manicuristas pueden atender
  * un servicio de `durationMin` completo sin cruzarse con otra cita y dentro de su horario.
  */
 export function computeSlots(input: SlotInput): Slot[] {

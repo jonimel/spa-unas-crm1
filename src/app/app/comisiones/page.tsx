@@ -34,7 +34,7 @@ function rentLine(per: Period, amount: number | null, unit: 'daily' | 'weekly' |
   return rentForPeriod(amount, unit, per.key === 'hoy' ? 'day' : per.key.startsWith('semana') ? 'week' : 'month', per.days)
 }
 
-// ---------------- barbero: "Mis comisiones" ----------------
+// ---------------- manicurista: "Mis comisiones" ----------------
 
 async function BarberView({ user, sp }: { user: CurrentUser; sp: SP }) {
   const key = asPeriodKey(sp.p, ['hoy', 'semana', 'mes'], 'semana')
@@ -98,9 +98,9 @@ async function BarberView({ user, sp }: { user: CurrentUser; sp: SP }) {
         </div>
         {scheme?.model === 'rent' && (
           <div className="kpi" style={{ gridColumn: '1 / -1' }}>
-            <small>Arriendo de silla del periodo</small>
+            <small>Arriendo de puesto del periodo</small>
             <b>{fmtMoney(rent)}</b>
-            <span className="ksub">Lo pagas a la barbería</span>
+            <span className="ksub">Lo pagas al spa</span>
           </div>
         )}
       </div>
@@ -126,7 +126,7 @@ async function BarberView({ user, sp }: { user: CurrentUser; sp: SP }) {
           <div className="li">
             <div className="grow">
               <div className="t">Propinas</div>
-              <div className="small muted">{shop.tipsToBarber ? '100% para ti' : 'Quedan para la barbería'}</div>
+              <div className="small muted">{shop.tipsToBarber ? '100% para ti' : 'Quedan para el spa'}</div>
             </div>
             <b className="num">{fmtMoney(tot?.barber_tip ?? 0)}</b>
           </div>
@@ -195,19 +195,19 @@ async function OwnerView({ user, sp }: { user: CurrentUser; sp: SP }) {
 
   return (
     <main>
-      <Top title="Pagos" sub="Comisiones y lo que se le debe a cada barbero" />
+      <Top title="Pagos" sub="Comisiones y lo que se le debe a cada manicurista" />
       <Flash ok={sp.ok as string} err={sp.err as string} />
 
       <div className="kpis" style={{ marginTop: 14 }}>
         <div className="kpi hero">
-          <small>Por pagar hoy a los barberos</small>
+          <small>Por pagar hoy a las manicuristas</small>
           <b>{fmtMoney(owedNow)}</b>
           <span className="ksub">Lo que han ganado menos lo que ya se les pagó</span>
           {rentNow > 0 && <span className="ksub">Arriendos por cobrar: {fmtMoney(rentNow)}</span>}
         </div>
       </div>
 
-      <div className="eyebrow">Barberos</div>
+      <div className="eyebrow">Manicuristas</div>
       <div className="card list" style={{ paddingBlock: 4 }}>
         {totals.map((t) => {
           const sc = schemes.get(t.barber_id) ?? null
@@ -247,7 +247,7 @@ async function OwnerView({ user, sp }: { user: CurrentUser; sp: SP }) {
         })}
       </div>
       <p className="small muted" style={{ margin: '8px 2px 0' }}>
-        Toca un barbero para registrar un pago o un adelanto, ver sus movimientos o cambiar su esquema.
+        Toca una manicurista para registrar un pago o un adelanto, ver sus movimientos o cambiar su esquema.
       </p>
 
       <div className="eyebrow">Resumen por periodo</div>
@@ -258,24 +258,24 @@ async function OwnerView({ user, sp }: { user: CurrentUser; sp: SP }) {
           <b>{fmtMoney(sales)}</b>
         </div>
         <div className="kpi">
-          <small>Ganaron los barberos</small>
+          <small>Ganaron las manicuristas</small>
           <b>{fmtMoney(earned)}</b>
           <span className="ksub">comisiones + propinas</span>
         </div>
         <div className="kpi" style={{ gridColumn: '1 / -1' }}>
-          <small>Queda para la barbería · {per.label}</small>
+          <small>Queda para el spa · {per.label}</small>
           <b>{fmtMoney(shopKeeps)}</b>
           {rentDue > 0 && <span className="ksub">incluye arriendos {fmtMoney(rentDue)}</span>}
         </div>
       </div>
       <details className="tbl">
-        <summary>Ver por barbero</summary>
+        <summary>Ver por manicurista</summary>
         <table>
           <thead>
             <tr>
-              <th>Barbero</th>
+              <th>Manicurista</th>
               <th>Ventas</th>
-              <th>Para el barbero</th>
+              <th>Para la manicurista</th>
             </tr>
           </thead>
           <tbody>
@@ -293,14 +293,14 @@ async function OwnerView({ user, sp }: { user: CurrentUser; sp: SP }) {
         </table>
       </details>
 
-      <div className="eyebrow">Reglas de la barbería</div>
+      <div className="eyebrow">Reglas del spa</div>
       <form action={saveShopRules} className="stack">
         <div className="rule">
           <div className="grow">
             <b>
               <label htmlFor="defaultPct">Comisión por defecto</label>
             </b>
-            <div className="small muted">Para barberos sin esquema propio</div>
+            <div className="small muted">Para manicuristas sin esquema propio</div>
           </div>
           <span className="row" style={{ gap: 4 }}>
             <input id="defaultPct" name="defaultPct" inputMode="decimal" defaultValue={shop.defaultPct} className="mini-in" aria-label="Porcentaje por defecto" />
@@ -309,8 +309,8 @@ async function OwnerView({ user, sp }: { user: CurrentUser; sp: SP }) {
         </div>
         <label className="rule">
           <div className="grow">
-            <b>Propinas para el barbero</b>
-            <div className="small muted">Si lo apagas, quedan para la barbería</div>
+            <b>Propinas para la manicurista</b>
+            <div className="small muted">Si lo apagas, quedan para el spa</div>
           </div>
           <input type="checkbox" name="tipsToBarber" defaultChecked={shop.tipsToBarber} className="sw-in" />
         </label>

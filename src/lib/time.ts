@@ -7,7 +7,7 @@ export function atLocal(ymd: string, minutes: number, tz: string): Date {
   return new Date(t.getTime())
 }
 
-/** Partes locales de un instante en la zona horaria de la barbería. */
+/** Partes locales de un instante en la zona horaria del spa. */
 export function localParts(date: Date, tz: string) {
   const t = new TZDate(date.getTime(), tz)
   const ymd = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`

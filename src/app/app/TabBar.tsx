@@ -16,7 +16,7 @@ const TABS = {
     { href: '/app/agenda', label: 'Mi agenda', icon: 'cal' },
     { href: '/app/comisiones', label: 'Pagos', icon: 'cash' },
     { href: '/app/clientes', label: 'Clientes', icon: 'users' },
-    { href: '/app/cuenta', label: 'Cuenta', icon: 'sc' },
+    { href: '/app/cuenta', label: 'Cuenta', icon: 'polish' },
   ],
 }
 

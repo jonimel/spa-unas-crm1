@@ -6,7 +6,7 @@ import { StatusPill } from '@/components/ui'
 import { apptView } from '@/lib/booking'
 import { rows } from '@/lib/db'
 import { firstName } from '@/lib/phone'
-import { fmtMoney } from '@/lib/time'
+import { fmtDuration, fmtMoney } from '@/lib/time'
 
 const UUID = /^[0-9a-f-]{36}$/i
 
@@ -54,9 +54,22 @@ export default async function CitaPublica({ params }: PageProps<'/r/[slug]/cita/
           <span className="grow" />
           <span className="small muted">{a.day}</span>
         </div>
-        <div style={{ fontFamily: 'var(--f-display)', fontSize: 34, marginTop: 10, textTransform: 'uppercase' }}>{a.time}</div>
-        <div className="muted">
-          {a.service_name} con {a.barber_name} · {fmtMoney(a.price)}
+        <div style={{ fontFamily: 'var(--f-display)', fontSize: 34, marginTop: 10 }}>{a.time}</div>
+        <div className="muted">con {a.barber_name}</div>
+        <div style={{ marginTop: 10 }}>
+          {a.lines.map((l, i) => (
+            <div className="kv" key={i}>
+              <span>
+                {l.is_addon ? '+ ' : ''}
+                {l.name}
+              </span>
+              <span className="num">{fmtMoney(l.price)}</span>
+            </div>
+          ))}
+          <div className="kv">
+            <span>Total · {fmtDuration(a.duration_min)}</span>
+            <span className="num">{fmtMoney(a.price)}</span>
+          </div>
         </div>
       </div>
       {msgs.length > 0 && (
