@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { PGlite } from '@electric-sql/pglite'
 import { CLIENT_FIRST as FIRST, CLIENT_LAST as LAST, DAY_FACTOR, DEMO, hourFactor, LINE_COLS, type DemoSvc } from './seed'
-import { pickCombo } from './demo-catalog'
+import { CLIENT_NOTES, DEMO_METHODS, demoTip, futureFactor, pickCombo, seasonFactor } from './demo-catalog'
 import { settlePending } from './payroll'
 import { addDaysYmd, atLocal, localParts, todayYmd, weekdayOf } from './time'
 
@@ -18,7 +18,6 @@ import { addDaysYmd, atLocal, localParts, todayYmd, weekdayOf } from './time'
 
 const AHEAD = 14
 const BACK = 60 // hasta dónde mira hacia atrás buscando días vacíos
-const METHODS = ['efectivo', 'efectivo', 'nequi', 'nequi', 'nequi', 'tarjeta', 'tarjeta', 'daviplata', 'transferencia']
 
 async function insertMany(db: PGlite, table: string, cols: string[], data: unknown[][]) {
   for (let i = 0; i < data.length; i += 400) {
@@ -116,9 +115,9 @@ export async function topUpDemo(db: PGlite, now = new Date()) {
             if (m + dur > h.end_min) break
           }
           const future = ymd > today || (ymd === today && m + dur > nowMin)
-          let p = Math.min(0.95, 0.55 * (DAY_FACTOR[wd] ?? 1) * hourFactor(m))
-          // lo que viene se va llenando: mañana casi lleno, en dos semanas poco
-          if (future) p *= ymd === today ? 0.8 : Math.max(0.3, 0.75 - ahead * 0.035)
+          let p = Math.min(0.95, 0.55 * (DAY_FACTOR[wd] ?? 1) * hourFactor(m) * seasonFactor(ymd))
+          // lo que viene se va llenando: mañana casi lleno, en dos semanas poco (igual que en el seed)
+          if (future) p *= futureFactor(ahead)
           const start = atLocal(ymd, m, tz)
           const end = new Date(start.getTime() + dur * 60_000)
           if (rnd() > p || taken(b.id, start, end)) {
@@ -132,15 +131,19 @@ export async function topUpDemo(db: PGlite, now = new Date()) {
           const mine = byBarber.get(b.id) ?? []
           const client = rnd() < 0.08 || !allClients.length ? newClient(created) : rnd() < 0.85 && mine.length ? pick(mine) : pick(allClients)
           let status = future ? 'confirmed' : 'completed'
+          let reason: string | null = null
+          const r = rnd()
           if (!future) {
-            const r = rnd()
             if (r < 0.05) status = 'no_show'
             else if (r < 0.1) status = 'cancelled'
-          }
+          } else if (ahead >= 2 && r < 0.035) status = 'cancelled' // la clienta canceló desde su link
+          if (status === 'cancelled') reason = rnd() < 0.6 ? 'Cancelada por la clienta' : 'La clienta pidió cambiar'
+          const source = rnd() < 0.7 ? 'online' : 'walkin'
+          const note = source === 'online' && status !== 'cancelled' && rnd() < 0.12 ? pick(CLIENT_NOTES) : null
           const id = randomUUID()
-          appts.push([id, t.id, b.branch_id, b.id, client, combo[0].id, start, end, status, rnd() < 0.7 ? 'online' : 'walkin', price, created, created])
+          appts.push([id, t.id, b.branch_id, b.id, client, combo[0].id, start, end, status, source, price, created, created, reason, note])
           addLines(id, combo)
-          if (status === 'completed') pays.push([t.id, id, b.branch_id, b.id, client, combo[0].id, price, rnd() < 0.35 ? pick([2000, 5000, 5000, 10000]) : 0, pick(METHODS), end])
+          if (status === 'completed') pays.push([t.id, id, b.branch_id, b.id, client, combo[0].id, price, demoTip(rnd), pick(DEMO_METHODS), end])
         }
       }
     }
@@ -157,12 +160,17 @@ export async function topUpDemo(db: PGlite, now = new Date()) {
   await db.transaction(async (tx) => {
     const tdb = tx as unknown as PGlite
     await insertMany(tdb, 'clients', ['id', 'tenant_id', 'name', 'phone', 'created_at'], newClients)
-    await insertMany(tdb, 'appointments', ['id', 'tenant_id', 'branch_id', 'barber_id', 'client_id', 'service_id', 'starts_at', 'ends_at', 'status', 'source', 'price', 'created_at', 'decided_at'], appts)
+    await insertMany(
+      tdb,
+      'appointments',
+      ['id', 'tenant_id', 'branch_id', 'barber_id', 'client_id', 'service_id', 'starts_at', 'ends_at', 'status', 'source', 'price', 'created_at', 'decided_at', 'cancel_reason', 'client_note'],
+      appts,
+    )
     await insertMany(tdb, 'appointment_services', LINE_COLS, lines)
     lines.length = 0
     for (const a of stale) {
       await tx.query(`update appointments set status = 'completed' where id = $1`, [a.id])
-      pays.push([t.id, a.id, a.branch_id, a.barber_id, a.client_id, a.service_id, a.price, rnd() < 0.35 ? pick([2000, 5000]) : 0, pick(METHODS), a.ends_at])
+      pays.push([t.id, a.id, a.branch_id, a.barber_id, a.client_id, a.service_id, a.price, demoTip(rnd), pick(DEMO_METHODS), a.ends_at])
     }
     await insertMany(tdb, 'payments', ['tenant_id', 'appointment_id', 'branch_id', 'barber_id', 'client_id', 'service_id', 'amount', 'tip', 'method', 'paid_at'], pays)
     // pendiente que ya pasó: nadie la confirmó

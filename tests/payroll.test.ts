@@ -36,9 +36,12 @@ describe('commissions', () => {
     // Camila: 50% general, Uñas acrílicas al 55%
     const camila = (await one<{ id: string; branch_id: string }>(`select id, branch_id from users where phone = $1`, [DEMO.barbers[0].phone]))!
     const svc = (await one<{ id: string }>(`select id from services where name = 'Uñas acrílicas'`))!
+    // el primer día (desde dentro de 6) en que Camila tiene 2 horas libres seguidas
     let ymd = addDaysYmd(todayYmd(t.timezone), 6)
-    while (weekdayOf(ymd) === 0) ymd = addDaysYmd(ymd, 1)
-    const slot = (await slotsFor(t, { branchId: camila.branch_id, durationMin: 120, ymd, barberId: camila.id }))[0]
+    let slot: Awaited<ReturnType<typeof slotsFor>>[number] | undefined
+    for (let i = 0; i < 30 && !slot; i++, ymd = addDaysYmd(ymd, 1))
+      if (weekdayOf(ymd) !== 0) slot = (await slotsFor(t, { branchId: camila.branch_id, durationMin: 120, ymd, barberId: camila.id }))[0]
+    if (!slot) throw new Error('Camila no tiene 2 h libres en un mes')
     const id = await createAppointment({ tenantId: t.id, branchId: camila.branch_id, serviceId: svc.id, start: slot.start, barberId: camila.id, clientName: 'Prueba Comisión', clientPhone: '3190000099', source: 'online' })
     await approve(owner, id)
     await checkout(owner, id, 110000, 5000, 'efectivo', await startOf(id))

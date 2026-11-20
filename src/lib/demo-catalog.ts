@@ -71,3 +71,85 @@ export function pickCombo<T extends Svc>(rnd: () => number, services: T[]): T[] 
   if (first.kind === 'mani') add('Parafina para manos', 0.06)
   return out.filter((c) => c).map((c) => by(c.name)!).filter(Boolean)
 }
+
+// ---------- ritmo de la demo (lo comparten el seed y el llenado de cada hora) ----------
+
+/** Medios de pago en Medellín: Nequi y Daviplata mandan; luego efectivo y tarjeta. */
+export const DEMO_METHODS = ['nequi', 'nequi', 'nequi', 'nequi', 'daviplata', 'daviplata', 'daviplata', 'efectivo', 'efectivo', 'tarjeta', 'tarjeta', 'transferencia']
+
+/** Propina: más de la mitad de las clientas deja algo. */
+export function demoTip(rnd: () => number) {
+  if (rnd() >= 0.58) return 0
+  const t = [2000, 3000, 5000, 5000, 5000, 10000, 10000, 15000, 20000]
+  return t[Math.floor(rnd() * t.length)]
+}
+
+/**
+ * Temporada: diciembre (novenas, fiestas, grados) se llena; noviembre ya empieza a subir; mayo por el Día de la Madre;
+ * enero es flojo (cuesta de enero).
+ */
+export function seasonFactor(ymd: string) {
+  const [, mo, day] = ymd.split('-').map(Number)
+  if (mo === 12) return day <= 24 ? 1.35 : 1.15
+  if (mo === 11 && day >= 15) return 1.12
+  if (mo === 5) return day <= 14 ? 1.25 : 1.05
+  if (mo === 1) return 0.8
+  return 1
+}
+
+/** Lo que viene se va llenando: hoy casi lleno, mañana bastante, en dos semanas poco. */
+export function futureFactor(daysAhead: number) {
+  return daysAhead <= 0 ? 1 : Math.max(0.55, 1.12 - daysAhead * 0.035)
+}
+
+/** Lo que una clienta escribe al reservar online (a veces). */
+export const CLIENT_NOTES = [
+  'Igual que la última vez',
+  'Quiero el mismo diseño de la foto que les mandé',
+  'Voy con mi hija, si se puede a la misma hora',
+  'Llego unos 10 minutos tarde, perdón',
+  'Tengo una uña partida',
+  'Es para un matrimonio el sábado',
+  'Quiero probar el color del mes',
+  'Me gustaría francés, por favor',
+]
+
+/** Notas, colores y alergias de las fichas de las clientas. */
+export const FICHA_NOTES = [
+  'Uñas almendradas largas. Siempre pide foto del resultado.',
+  'Le gusta el nude; nada muy brillante para el trabajo.',
+  'Forma cuadrada corta, cutícula con mucho cuidado.',
+  'Prefiere la cita temprano, antes de ir a la oficina.',
+  'Viene cada 15 días, casi siempre con su mamá.',
+  'Le encanta el nail art minimalista: puntos, líneas finas.',
+  'Uñas débiles: recomendar kapping en vez de acrílico.',
+  'Pide café sin azúcar. Conversa mucho, súper querida.',
+  'Coffin medianas; en temporada pide piedras y brillos.',
+  'Muerde las uñas: animarla con el semipermanente.',
+  'Paga siempre por Nequi. Le gusta el masaje largo en pedicure.',
+  'Tiene uñas encarnadas en el pie derecho: con cuidado.',
+  'Es novia en diciembre: está planeando las uñas del matrimonio.',
+  'Le gusta salir con el mismo color en manos y pies.',
+]
+export const FICHA_COLORS = [
+  'Nude, rosa palo',
+  'Rojo cereza, vino tinto',
+  'Francés clásico',
+  'Lila, tonos pastel',
+  'Negro mate, chrome plateado',
+  'Nude con glitter dorado',
+  'Verde oliva, terracota',
+  'Baby boomer',
+  'Rosa chicle, fucsia en vacaciones',
+  'Azul noche, burgundy',
+  'Blanco leche, milky pink',
+  'Chrome perla, aurora',
+]
+export const FICHA_ALLERGIES = [
+  'Alergia al látex: usar guantes de nitrilo.',
+  'Piel sensible a la acetona: usar removedor sin acetona.',
+  'Reacción al monómero del acrílico: solo polygel o semipermanente.',
+  'Alergia a fragancias: crema y parafina sin perfume.',
+  'Dermatitis en la mano izquierda: no limar cutícula.',
+  'Diabética: pedicure sin cortar cutícula, revisar heridas.',
+]

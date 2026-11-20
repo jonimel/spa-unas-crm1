@@ -242,6 +242,40 @@ describe('datos de ejemplo', () => {
     expect(off!.n).toBe(0)
   })
 
+  it('demo con vida: agenda de las próximas 2 semanas, fichas, propinas, Nequi/Daviplata y avisos', async () => {
+    const n = async (sql: string, p: unknown[] = [t.id]) => (await one<{ n: number }>(sql, p))!.n
+    // cada día de trabajo de las próximas 2 semanas tiene citas, y hay solicitudes por aprobar y alguna cancelación de la clienta
+    const days = await rows<{ d: string; n: number }>(
+      `select to_char(starts_at at time zone 'America/Bogota', 'YYYY-MM-DD') d, count(*)::int n from appointments
+        where tenant_id = $1 and starts_at > now() + interval '1 day' and starts_at < now() + interval '13 days' and status in ('confirmed', 'pending') group by 1`,
+      [t.id],
+    )
+    expect(days.length).toBeGreaterThanOrEqual(9)
+    for (const d of days) expect(d.n, d.d).toBeGreaterThanOrEqual(5)
+    expect(await n(`select count(*)::int n from appointments where tenant_id = $1 and status = 'pending' and starts_at > now()`)).toBeGreaterThanOrEqual(3)
+    expect(await n(`select count(*)::int n from appointments where tenant_id = $1 and cancel_reason = 'Cancelada por la clienta'`)).toBeGreaterThan(0)
+    // fichas: 10–25 % con colores y notas, unas pocas con alergias
+    const total = await n(`select count(*)::int n from clients where tenant_id = $1`)
+    const colors = await n(`select count(*)::int n from clients where tenant_id = $1 and favorite_colors is not null`)
+    expect(colors / total).toBeGreaterThan(0.1)
+    expect(colors / total).toBeLessThan(0.25)
+    const allergies = await n(`select count(*)::int n from clients where tenant_id = $1 and allergies is not null`)
+    expect(allergies).toBeGreaterThanOrEqual(3)
+    expect(allergies).toBeLessThanOrEqual(10)
+    // propina en buena parte de los cobros; Nequi y Daviplata son más de la mitad
+    const pays = await n(`select count(*)::int n from payments where tenant_id = $1`)
+    expect((await n(`select count(*)::int n from payments where tenant_id = $1 and tip > 0`)) / pays).toBeGreaterThan(0.4)
+    expect((await n(`select count(*)::int n from payments where tenant_id = $1 and method in ('nequi', 'daviplata')`)) / pays).toBeGreaterThan(0.5)
+    // viernes con más citas que lunes; historial de retoques y de pagos al equipo; pocos avisos sin leer
+    const fri = await n(`select count(*)::int n from appointments where tenant_id = $1 and starts_at < now() and extract(dow from starts_at at time zone 'America/Bogota') = 5`)
+    const mon = await n(`select count(*)::int n from appointments where tenant_id = $1 and starts_at < now() and extract(dow from starts_at at time zone 'America/Bogota') = 1`)
+    expect(fri).toBeGreaterThan(mon)
+    expect(await n(`select count(*)::int n from refill_reminders where tenant_id = $1 and skipped_at is not null`)).toBeGreaterThan(50)
+    expect(await n(`select count(*)::int n from barber_payouts where tenant_id = $1`)).toBeGreaterThan(50)
+    expect(await n(`select count(*)::int n from alerts where tenant_id = $1 and kind = 'client_cancelled' and read_at is null`)).toBeLessThanOrEqual(6)
+    expect(await n(`select count(*)::int n from messages where tenant_id = $1 and appointment_id is null`)).toBe(0)
+  })
+
   it('los retoques que ya tocaban quedan enviados a las 10 a. m. de su día, no a la hora de arranque', async () => {
     const seeded = await rows<{ due_at: Date; sent_at: Date | null; skipped_at: Date | null; msg_at: Date | null; body: string | null }>(
       `select r.due_at, r.sent_at, r.skipped_at, m.created_at msg_at, m.body

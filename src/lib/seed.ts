@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { PGlite, Transaction } from '@electric-sql/pglite'
 import { computeShare, type Scheme, type ShopRules } from './commission'
-import { DEMO_CATALOG, pickCombo } from './demo-catalog'
+import { CLIENT_NOTES, DEMO_CATALOG, DEMO_METHODS, demoTip, FICHA_ALLERGIES, FICHA_COLORS, FICHA_NOTES, futureFactor, pickCombo, seasonFactor } from './demo-catalog'
 import { bookingLink } from './booking'
 import { firstName } from './phone'
 import { hashPin, verifyPin } from './pin'
 import { render } from './whatsapp'
-import { addDaysYmd, atLocal, fmtYmdShort, localParts, todayYmd, weekdayOf } from './time'
+import { addDaysYmd, atLocal, fmtDay, fmtTime, fmtYmdShort, localParts, todayYmd, weekdayOf } from './time'
 
 /**
  * Datos de ejemplo para probar en local: el spa de uñas "Spa Uñas Bella" (Medellín, una sede).
@@ -74,8 +74,8 @@ const NAMED_CLIENTS = [
   ['Luisa Fernanda Quintero', '3187763341'], ['Ana María Restrepo', '3114402958'], ['Carolina Cárdenas', '3229081146'],
   ['Alejandra Salazar', '3165530712'], ['Gabriela Rincón', '3023396604'],
 ]
-export const CLIENT_FIRST = ['Valentina', 'Juliana', 'Sofía', 'Natalia', 'Paula', 'Isabella', 'Manuela', 'Sara', 'Catalina', 'Luisa Fernanda', 'Ana María', 'Carolina', 'Alejandra', 'Gabriela', 'Andrea', 'Melissa', 'Tatiana', 'Lina', 'Paola', 'Diana', 'Verónica', 'Salomé', 'Antonia', 'Mónica', 'Juana', 'María José', 'Laura Sofía', 'Daniela', 'Mariana', 'Luciana']
-export const CLIENT_LAST = ['Pérez', 'Herrera', 'Castro', 'Ramírez', 'Ortiz', 'Vargas', 'Torres', 'Moreno', 'Jiménez', 'Quintero', 'Restrepo', 'Cárdenas', 'Salazar', 'Rincón', 'López', 'Martínez', 'Rodríguez', 'García', 'Sánchez', 'Muñoz', 'Arias', 'Ospina', 'Valencia', 'Mejía', 'Londoño', 'Zapata', 'Giraldo', 'Cortés', 'Patiño', 'Suárez']
+export const CLIENT_FIRST = ['Valentina', 'Juliana', 'Sofía', 'Natalia', 'Paula', 'Isabella', 'Manuela', 'Sara', 'Catalina', 'Luisa Fernanda', 'Ana María', 'Carolina', 'Alejandra', 'Gabriela', 'Andrea', 'Melissa', 'Tatiana', 'Lina', 'Paola', 'Diana', 'Verónica', 'Salomé', 'Antonia', 'Mónica', 'Juana', 'María José', 'Laura Sofía', 'Daniela', 'Mariana', 'Luciana', 'Ximena', 'Camila Andrea', 'Yuliana', 'Leidy', 'Marcela', 'Estefanía', 'Manuela Sofía', 'Valeria', 'Sara Lucía', 'Paulina', 'Kelly Johana', 'Angie', 'Vanessa', 'Natalia Andrea', 'Susana', 'Clara', 'Isabel', 'Margarita', 'Gloria Inés', 'Beatriz', 'Luz Marina']
+export const CLIENT_LAST = ['Pérez', 'Herrera', 'Castro', 'Ramírez', 'Ortiz', 'Vargas', 'Torres', 'Moreno', 'Jiménez', 'Quintero', 'Restrepo', 'Cárdenas', 'Salazar', 'Rincón', 'López', 'Martínez', 'Rodríguez', 'García', 'Sánchez', 'Muñoz', 'Arias', 'Ospina', 'Valencia', 'Mejía', 'Londoño', 'Zapata', 'Giraldo', 'Cortés', 'Patiño', 'Suárez', 'Montoya', 'Henao', 'Agudelo', 'Betancur', 'Gaviria', 'Echeverri', 'Uribe', 'Escobar', 'Vélez', 'Posada', 'Arango', 'Tobón', 'Gómez', 'Álvarez', 'Correa', 'Duque', 'Franco', 'Hincapié', 'Naranjo', 'Ochoa', 'Palacio']
 const PHONE_PREFIX = ['300', '301', '302', '304', '305', '310', '311', '312', '313', '314', '315', '316', '318', '320', '321', '322', '323', '350', '351']
 
 /** Qué tan llena suele estar la agenda: viernes y sábados más, lunes y martes menos; la tarde temprano es floja. */
@@ -139,6 +139,7 @@ export async function seedIfEmpty(db: PGlite) {
     const start0 = atLocal(addDaysYmd(today, -HISTORY_DAYS), 9 * 60, TZ)
 
     const clientRows: unknown[][] = []
+    const clientById = new Map<string, { name: string; phone: string | null }>()
     const usedPhones = new Set([DEMO.owner.phone, ...DEMO.barbers.map((b) => b.phone)])
     const usedNames = new Set([DEMO.owner.name, ...DEMO.barbers.map((b) => b.name)])
     const byBarber: string[][] = barbers.map(() => [])
@@ -147,6 +148,7 @@ export async function seedIfEmpty(db: PGlite) {
       usedPhones.add(phone)
       usedNames.add(name)
       clientRows.push([id, t.id, name, phone, created])
+      clientById.set(id, { name, phone })
       byBarber[barber].push(id)
       return id
     }
@@ -198,13 +200,19 @@ export async function seedIfEmpty(db: PGlite) {
     }
     const weekEarn = barbers.map(() => new Map<string, number>()) // lo que ganó cada manicurista por semana (lunes)
 
-    // ---------- historial: HISTORY_DAYS hacia atrás + hoy + 3 días adelante ----------
-    const methods = ['efectivo', 'efectivo', 'nequi', 'nequi', 'nequi', 'tarjeta', 'tarjeta', 'daviplata', 'transferencia']
+    // ---------- historial: HISTORY_DAYS hacia atrás + hoy + 2 semanas adelante ----------
     const apptRows: unknown[][] = []
     const lineRows: unknown[][] = []
     const payRows: unknown[][] = []
-    const lastVisit = new Map<string, { id: string; start: Date; ymd: string; svc: DemoSvc[]; status: string }>()
-    for (let d = -HISTORY_DAYS; d <= 3; d++) {
+    const msgRows: unknown[][] = [] // WhatsApp (simulados) de las citas que vienen
+    const alertRows: unknown[][] = []
+    const visits = new Map<string, { id: string; start: Date; end: Date; ymd: string; svc: DemoSvc[]; status: string }[]>() // por clienta, en orden
+    const mins = (n: number) => n * 60_000
+    let noShowToday = false
+    const msg = (to: string | null, kind: 'client' | 'barber' | 'owner', template: Parameters<typeof render>[0], vars: Record<string, string>, appt: string, at: Date) => {
+      if (to && at <= now) msgRows.push([t.id, to, kind, template, render(template, vars), appt, 'simulated', at])
+    }
+    for (let d = -HISTORY_DAYS; d <= 14; d++) {
       const ymd = addDaysYmd(today, d)
       const wd = weekdayOf(ymd)
       if (wd === 0) continue
@@ -213,9 +221,9 @@ export async function seedIfEmpty(db: PGlite) {
         for (const [from, to] of [[9 * 60, 13 * 60], [14 * 60, wd === 6 ? 18 * 60 : 20 * 60]]) {
           let m = from
           while (m + 45 <= to) {
-            let p = Math.min(0.95, 0.5 * growth * DAY_FACTOR[wd] * hourFactor(m))
+            let p = Math.min(0.95, 0.5 * growth * DAY_FACTOR[wd] * hourFactor(m) * seasonFactor(ymd))
             const future0 = d > 0 || (d === 0 && m > nowMin)
-            if (future0) p *= d === 0 ? 0.75 : 0.55
+            if (future0) p *= futureFactor(d)
             if (rnd() > p) {
               m += 30
               continue
@@ -232,24 +240,53 @@ export async function seedIfEmpty(db: PGlite) {
             const endAt = new Date(start.getTime() + dur * 60_000)
             // lo que aún no termina (o es más tarde) queda confirmado; lo que ya terminó se cobró
             const future = d > 0 || (d === 0 && m + dur > nowMin)
-            const created = new Date(start.getTime() - (1 + Math.floor(rnd() * 4)) * 864e5)
+            let created = new Date(Math.min(now.getTime() - mins(90), start.getTime() - (1 + Math.floor(rnd() * 6)) * 864e5))
             let client: string
             if (bi === 0 && rnd() < 0.03) client = valentina
             else if (rnd() < 0.09) client = addClient(newName(), newPhone(), created, bi)
             else client = rnd() < 0.85 ? pick(byBarber[bi]) : pick(allClients())
+            const source = rnd() < 0.7 ? 'online' : 'walkin'
             let status = 'completed'
-            if (future) status = 'confirmed'
-            else {
+            let decided: Date | null = created
+            let reason: string | null = null
+            let deadline: Date | null = null
+            let note: string | null = source === 'online' && rnd() < 0.12 ? pick(CLIENT_NOTES) : null
+            if (future) {
+              status = 'confirmed'
               const r = rnd()
-              if (r < 0.05) status = 'no_show'
-              else if (r < 0.1) status = 'cancelled'
+              if (source === 'online' && d >= 1 && d <= 7 && r < 0.08) {
+                // solicitud recién llegada: la manicurista aún no responde
+                status = 'pending'
+                created = new Date(now.getTime() - mins(5 + Math.floor(rnd() * 80)))
+                decided = null
+                deadline = new Date(Math.min(created.getTime() + mins(120), start.getTime() - mins(30)))
+              } else if (r >= 0.08 && r < 0.098) {
+                // la clienta canceló desde su link (en los últimos días)
+                status = 'cancelled'
+                reason = 'Cancelada por la clienta'
+                decided = new Date(Math.min(now.getTime() - mins(20), created.getTime() + (0.5 + rnd() * 2) * 864e5))
+                if (decided < created) decided = new Date(created.getTime() + mins(30))
+                note = null
+              } else decided = new Date(Math.min(now.getTime() - mins(60), created.getTime() + mins(20 + Math.floor(rnd() * 60))))
+            } else {
+              const r = rnd()
+              if (d === 0 && !noShowToday && bi === 2) {
+                status = 'no_show'
+                noShowToday = true
+              } else if (r < 0.05) status = 'no_show'
+              else if (r < 0.1) {
+                status = 'cancelled'
+                reason = rnd() < 0.6 ? 'Cancelada por la clienta' : pick(['La clienta pidió cambiar', 'Se enfermó', 'Viaje de trabajo'])
+                decided = new Date(start.getTime() - mins(60 * (2 + Math.floor(rnd() * 40))))
+                if (decided < created) decided = created
+              }
             }
             const id = randomUUID()
-            apptRows.push([id, t.id, b.branch, b.id, client, combo[0].id, start, endAt, status, rnd() < 0.7 ? 'online' : 'walkin', price, created, created])
+            apptRows.push([id, t.id, b.branch, b.id, client, combo[0].id, start, endAt, status, source, price, created, decided, reason, deadline, note])
             let shares: { charged: number; barberShare: number; rule: string }[] | null = null
             if (status === 'completed') {
-              const tip = rnd() < 0.35 ? pick([2000, 5000, 5000, 10000]) : 0
-              const method = pick(methods)
+              const tip = demoTip(rnd)
+              const method = pick(DEMO_METHODS)
               const sh = computeShare({ amount: price, tip, method, lines: combo.map((x) => ({ serviceId: x.id, price: x.price })) }, schemes[bi], shop)
               shares = sh.lines
               payRows.push([t.id, id, b.branch, b.id, client, combo[0].id, price, tip, method, endAt, sh.barberShare, sh.barberTip, sh.shopShare, sh.rule])
@@ -259,14 +296,48 @@ export async function seedIfEmpty(db: PGlite) {
             combo.forEach((x, i) =>
               lineRows.push([t.id, id, x.id, x.name, x.duration_min, x.price, x.is_addon, i, shares?.[i].charged ?? null, shares?.[i].barberShare ?? null, shares?.[i].rule ?? null]),
             )
-            if (status !== 'cancelled' && status !== 'no_show') lastVisit.set(client, { id, start, ymd, svc: combo, status })
+            if (status !== 'cancelled' && status !== 'no_show') {
+              const list = visits.get(client) ?? []
+              list.push({ id, start, end: endAt, ymd, svc: combo, status })
+              visits.set(client, list)
+            }
+            // WhatsApp de las citas de estos días (los que ya salieron) y avisos en la app
+            if (d >= -1) {
+              const c = clientById.get(client)!
+              const bn = DEMO.barbers[bi].name
+              const day = fmtDay(start, TZ)
+              const time = fmtTime(start, TZ)
+              const servicio = combo.map((x) => x.name).join(' + ')
+              const nombre = firstName(c.name)
+              if (source === 'online') {
+                msg(c.phone, 'client', 'solicitud_recibida', { nombre, spa: 'Spa Uñas Bella', servicio, fecha: day, hora: time, manicurista: bn }, id, created)
+                msg(DEMO.barbers[bi].phone, 'barber', 'manicurista_nueva_solicitud', { manicurista: firstName(bn), cliente: c.name, servicio, fecha: day, hora: time, limite: fmtTime(new Date(created.getTime() + mins(120)), TZ) }, id, created)
+              }
+              if (status !== 'pending' && decided && source === 'online')
+                msg(c.phone, 'client', 'cita_confirmada', { nombre, fecha: day, hora: time, manicurista: bn, sede: 'El Poblado', direccion: 'Cl. 10 #40-25, local 104' }, id, new Date(Math.min(decided.getTime(), created.getTime() + mins(40))))
+              if (status === 'cancelled' && reason === 'Cancelada por la clienta' && decided) {
+                msg(c.phone, 'client', 'cancelada_por_clienta', { nombre, fecha: day, hora: time, link: bookingLink(DEMO.slug) }, id, decided)
+                msg(DEMO.barbers[bi].phone, 'barber', 'manicurista_cita_cancelada', { manicurista: firstName(bn), cliente: c.name, fecha: day, hora: time }, id, decided)
+                if (future) {
+                  const title = `${c.name} canceló su cita del ${day}, ${time} (${servicio})`
+                  alertRows.push([t.id, owner.id, 'client_cancelled', title, id, decided, decided], [t.id, b.id, 'client_cancelled', title, id, decided, decided])
+                }
+              }
+              if (status === 'confirmed' && d === 0 && start.getTime() - now.getTime() < mins(120) && start > now)
+                msg(c.phone, 'client', 'recordatorio', { nombre, hora: time, manicurista: bn, sede: 'El Poblado' }, id, new Date(start.getTime() - mins(120)))
+            }
             m += Math.ceil(dur / 15) * 15
           }
         }
       })
     }
     await insertMany(tx, 'clients', ['id', 'tenant_id', 'name', 'phone', 'created_at'], clientRows)
-    await insertMany(tx, 'appointments', ['id', 'tenant_id', 'branch_id', 'barber_id', 'client_id', 'service_id', 'starts_at', 'ends_at', 'status', 'source', 'price', 'created_at', 'decided_at'], apptRows)
+    await insertMany(
+      tx,
+      'appointments',
+      ['id', 'tenant_id', 'branch_id', 'barber_id', 'client_id', 'service_id', 'starts_at', 'ends_at', 'status', 'source', 'price', 'created_at', 'decided_at', 'cancel_reason', 'approval_deadline', 'client_note'],
+      apptRows,
+    )
     await insertMany(tx, 'appointment_services', LINE_COLS, lineRows)
     await insertMany(
       tx,
@@ -286,30 +357,53 @@ export async function seedIfEmpty(db: PGlite) {
     await q(`update clients set allergies = $2, favorite_colors = $3 where id = $1`, [named[2], 'Alergia al látex: usar guantes de nitrilo.', 'Tonos pastel, lila'])
     await q(`update clients set favorite_colors = $2, notes = $3 where id = $1`, [named[5], 'Francés clásico, blanco leche', 'Viene cada 3 semanas, casi siempre el sábado.'])
 
-    // ---------- recordatorios de retoque de las visitas recientes ----------
-    // Los que ya tocaron quedan enviados a las 10 a. m. de su día (con su mensaje), como si el sistema hubiera
-    // estado corriendo; los demás quedan pendientes y salen solos cuando llegue su día.
-    const clientInfo = new Map(clientRows.map((r) => [r[0] as string, { name: r[2] as string, phone: r[3] as string | null }]))
+    // ~18% de las clientas con colores y notas en la ficha; unas pocas con alergias
+    const special = new Set<string>([valentina, named[2], named[5]])
+    const fichas: [string, string | null, string | null, string | null][] = []
+    let allergyCount = 0
+    for (const r of clientRows) {
+      const id = r[0] as string
+      if (special.has(id) || rnd() >= 0.15) continue
+      const allergy = allergyCount < FICHA_ALLERGIES.length && rnd() < 0.2 ? FICHA_ALLERGIES[allergyCount++] : null
+      fichas.push([id, pick(FICHA_NOTES), pick(FICHA_COLORS), allergy])
+    }
+    for (const [id, notes, colors, allergies] of fichas)
+      await q(`update clients set notes = $2, favorite_colors = $3, allergies = $4 where id = $1`, [id, notes, colors, allergies])
+    // ---------- recordatorios de retoque (historial de los últimos 4 meses) ----------
+    // Cada visita cobrada con un servicio de retoque deja su recordatorio. Si la clienta volvió antes, quedó reemplazado
+    // ese día; si no, salió a las 10 a. m. del día que tocaba (con su mensaje). Los que vienen quedan pendientes.
     const refills: unknown[][] = []
     const sentMsgs: unknown[][] = []
-    for (const [client, v] of lastVisit) {
-      if (v.status !== 'completed' || v.ymd < addDaysYmd(today, -25)) continue
-      const line = v.svc.filter((x) => refillDays.has(x.id)).sort((a, b) => refillDays.get(a.id)! - refillDays.get(b.id)!)[0]
-      if (!line) continue
-      const due = atLocal(addDaysYmd(v.ymd, refillDays.get(line.id)!), 10 * 60, TZ)
-      const c = clientInfo.get(client)
-      const sent = due <= now && !!c?.phone
-      refills.push([t.id, client, v.id, line.name, due, v.start, sent ? due : null, due <= now && !sent ? due : null])
-      if (sent) {
-        const vars = {
-          nombre: firstName(c.name), spa: 'Spa Uñas Bella', servicio: line.name,
-          dias: String(Math.max(1, Math.round((due.getTime() - v.start.getTime()) / 864e5))), link: bookingLink(DEMO.slug),
+    for (const [client, list] of visits) {
+      const c = clientById.get(client)
+      list.forEach((v, i) => {
+        if (v.status !== 'completed' || v.ymd < addDaysYmd(today, -120)) return
+        const line = v.svc.filter((x) => refillDays.has(x.id)).sort((a, b) => refillDays.get(a.id)! - refillDays.get(b.id)!)[0]
+        if (!line || !c?.phone) return
+        const due = atLocal(addDaysYmd(v.ymd, refillDays.get(line.id)!), 10 * 60, TZ)
+        const next = list[i + 1]
+        // volvió antes de que tocara: al cobrarle la nueva visita, este recordatorio quedó reemplazado.
+        // Si ya tenía la próxima cita reservada cuando tocaba, no se envió (se marcó ese día).
+        let skippedAt: Date | null = null
+        if (next && next.start <= due && next.status === 'completed') skippedAt = next.end
+        else if (next && due <= now && next.start.getTime() - due.getTime() < 3 * 864e5) skippedAt = due
+        const sent = !skippedAt && due <= now
+        refills.push([t.id, client, v.id, line.name, due, v.end, sent ? due : null, skippedAt])
+        if (sent) {
+          const vars = {
+            nombre: firstName(c.name), spa: 'Spa Uñas Bella', servicio: line.name,
+            dias: String(Math.max(1, Math.round((due.getTime() - v.start.getTime()) / 864e5))), link: bookingLink(DEMO.slug),
+          }
+          sentMsgs.push([t.id, c.phone, 'client', 'retoque', render('retoque', vars), v.id, 'simulated', due])
         }
-        sentMsgs.push([t.id, c.phone, 'client', 'retoque', render('retoque', vars), v.id, 'simulated', due])
-      }
+      })
     }
     await insertMany(tx, 'refill_reminders', ['tenant_id', 'client_id', 'appointment_id', 'service_name', 'due_at', 'created_at', 'sent_at', 'skipped_at'], refills)
-    await insertMany(tx, 'messages', ['tenant_id', 'to_phone', 'to_kind', 'template', 'body', 'appointment_id', 'status', 'created_at'], sentMsgs)
+    await insertMany(tx, 'messages', ['tenant_id', 'to_phone', 'to_kind', 'template', 'body', 'appointment_id', 'status', 'created_at'], [...sentMsgs, ...msgRows])
+    // avisos en la app: las dos cancelaciones más recientes siguen sin leer; las demás ya se vieron
+    alertRows.sort((a, b) => (b[6] as Date).getTime() - (a[6] as Date).getTime())
+    alertRows.slice(0, 4).forEach((r) => (r[5] = null))
+    await insertMany(tx, 'alerts', ['tenant_id', 'user_id', 'kind', 'title', 'appointment_id', 'read_at', 'created_at'], alertRows)
 
     // ---------- pagos a las manicuristas ----------
     // Cada lunes la dueña les paga lo de la semana anterior; a veces un adelanto el miércoles.
@@ -331,6 +425,10 @@ export async function seedIfEmpty(db: PGlite) {
         const asked = bi === 1 && w === thisMonday
         if (wed <= today && (asked || rnd() < 0.15)) {
           advance = asked ? 100000 : pick([50000, 100000])
+          // un adelanto nunca pasa de lo que ganó esa semana (si no, el saldo quedaría a favor del spa)
+          if (!asked && advance >= earned) advance = 0
+        }
+        if (advance > 0) {
           payoutRows.push([t.id, b.id, 'adelanto', advance, pick(['efectivo', 'nequi']), wed, null, owner.id])
         }
         if (nextMon <= today && earned - advance > 0)
@@ -348,7 +446,10 @@ export async function seedIfEmpty(db: PGlite) {
       const dur = combo.reduce((a, x) => a + x.duration_min, 0)
       const end = new Date(start.getTime() + dur * 60_000)
       const clash = await q(`select id from appointments where barber_id = $1 and status in ('pending','confirmed') and starts_at < $3 and ends_at > $2`, [camila.id, start, end])
-      for (const c of clash) await q(`delete from appointments where id = $1`, [c.id])
+      for (const c of clash) {
+        await q(`delete from messages where appointment_id = $1`, [c.id])
+        await q(`delete from appointments where id = $1`, [c.id])
+      }
       const created = new Date(now.getTime() - createdAgoMin * 60_000)
       const [a] = await q(
         `insert into appointments (tenant_id, branch_id, barber_id, client_id, service_id, starts_at, ends_at, status, source, price, created_at, approval_deadline, client_note)
