@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { Icon } from '@/components/Icon'
 import { Avatar, Flash, METHOD_LABEL, StatusPill, Top } from '@/components/ui'
 import { requireUser } from '@/lib/auth'
+import { canChargeAt } from '@/lib/appointments'
 import { apptView } from '@/lib/booking'
 import { rows } from '@/lib/db'
 import { fmtPhone } from '@/lib/phone'
@@ -26,9 +27,8 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
   )
   const tz = a.timezone
   const backTo = `/app/cita/${id}`
-  // eslint-disable-next-line react-hooks/purity -- componente de servidor, se calcula por petición
-  const canCharge = ['confirmed', 'pending'].includes(a.status) && new Date(a.starts_at).getTime() - Date.now() < 3 * 3600_000
-  const sourceLabel = { online: 'Reserva online', walkin: 'Cliente de paso', staff: 'Agendada en el spa' }[a.source]
+  const canCharge = canChargeAt(a)
+  const sourceLabel = { online: 'Reserva online', walkin: 'Clienta de paso', staff: 'Agendada en el spa' }[a.source]
 
   return (
     <main>
@@ -174,12 +174,12 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
           <form action={cancelAction} className="stack" style={{ marginTop: 12 }}>
             <input type="hidden" name="id" value={id} />
             <div className="field">
-              <label htmlFor="reason">Motivo (opcional, no se le envía al cliente)</label>
+              <label htmlFor="reason">Motivo (opcional, no se le envía a la clienta)</label>
               <div className="in">
-                <input id="reason" name="reason" placeholder="Ej.: el cliente pidió cambiar" />
+                <input id="reason" name="reason" placeholder="Ej.: la clienta pidió cambiar" />
               </div>
             </div>
-            <button className="btn no">Sí, cancelar y avisar al cliente</button>
+            <button className="btn no">Sí, cancelar y avisar a la clienta</button>
           </form>
         </details>
       )}
@@ -191,7 +191,7 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
             {msgs.map((m, i) => (
               <div key={i}>
                 <div className="small muted" style={{ marginBottom: 4 }}>
-                  Para {m.to_kind === 'client' ? 'el cliente' : m.to_kind === 'barber' ? 'la manicurista' : 'el dueño'} · {fmtTime(new Date(m.created_at), tz)}
+                  Para {m.to_kind === 'client' ? 'la clienta' : m.to_kind === 'barber' ? 'la manicurista' : 'el dueño'} · {fmtTime(new Date(m.created_at), tz)}
                   {m.status === 'simulated' ? ' · simulado' : m.status === 'failed' ? ' · falló' : ''}
                 </div>
                 <div className="bubble">{m.body}</div>

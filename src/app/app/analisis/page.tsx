@@ -147,9 +147,9 @@ export default async function Analisis({ searchParams }: PageProps<'/app/analisi
           <span className="ksub">aparte de los ingresos</span>
         </div>
         <div className="kpi">
-          <small>Clientes nuevos</small>
+          <small>Clientas nuevas</small>
           <b>{st.newClients}</b>
-          <span className="ksub">{st.returningPct}% ya eran clientes</span>
+          <span className="ksub">{st.returningPct}% ya eran clientas</span>
         </div>
         <div className="kpi">
           <small>No vinieron</small>

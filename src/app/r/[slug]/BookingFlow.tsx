@@ -96,7 +96,7 @@ export function BookingFlow(props: {
   const branchBarbers = useMemo(() => barbers.filter((b) => branchId && b.branch_ids.includes(branchId)), [barbers, branchId])
   const barberName = (id: string) => barbers.find((b) => b.id === id)?.name ?? ''
 
-  // recordar al cliente en este celular
+  // recordar a la clienta en este celular
   useEffect(() => {
     try {
       const me = JSON.parse(localStorage.getItem(STORE) ?? 'null')
@@ -126,7 +126,7 @@ export function BookingFlow(props: {
     }
   }, [slug, branchId, chosenKey, date, step, reload])
 
-  // ¿ya es cliente?
+  // ¿ya es clienta?
   const normPhone = normalizeCoPhone(phone)
   const phoneBad = !normPhone && (phoneTouched || phone.replace(/\D/g, '').length >= 10)
   useEffect(() => {

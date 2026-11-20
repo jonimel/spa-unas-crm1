@@ -4,7 +4,7 @@ import path from 'node:path'
 import { DATA_DIR, getDb, one, rows } from './db'
 
 /**
- * Copias de seguridad de la base de datos local: un archivo .tar.gz con todo (citas, clientes, pagos…).
+ * Copias de seguridad de la base de datos local: un archivo .tar.gz con todo (citas, clientas, pagos…).
  * Se guarda una copia automática al día en la carpeta `backups/` (se conservan las últimas 14),
  * y el dueño puede descargar una en cualquier momento desde Ajustes. Para restaurar: `npm run restore`.
  */

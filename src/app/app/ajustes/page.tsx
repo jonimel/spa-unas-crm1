@@ -47,7 +47,7 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
           </a>
         </div>
         <p className="small muted" style={{ margin: '8px 0 0' }}>
-          Compártelo en Instagram, Google Maps y el estado de WhatsApp. Los clientes reservan sin descargar nada.
+          Compártelo en Instagram, Google Maps y el estado de WhatsApp. Las clientas reservan sin descargar nada.
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
           </a>
         </div>
         <p className="small muted" style={{ margin: '8px 0 0' }}>
-          Mándaselo solo a tu equipo. Cada manicurista entra con su celular y el PIN que le asignas. No lo compartas con clientes.
+          Mándaselo solo a tu equipo. Cada manicurista entra con su celular y el PIN que le asignas. No lo compartas con clientas.
         </p>
       </div>
 
@@ -183,13 +183,13 @@ export default async function Ajustes({ searchParams }: PageProps<'/app/ajustes'
       <div className="card stack">
         {shared ? (
           <p className="small muted" style={{ margin: 0, lineHeight: 1.5 }}>
-            Cada día se guarda sola una copia de todo. Si quieres tener tus datos (citas, clientes, pagos) también en Drive o en una memoria USB,
+            Cada día se guarda sola una copia de todo. Si quieres tener tus datos (citas, clientas, pagos) también en Drive o en una memoria USB,
             descárgalos aquí.
           </p>
         ) : (
           <>
             <p className="small muted" style={{ margin: 0, lineHeight: 1.5 }}>
-              Cada día se guarda sola una copia de todo (citas, clientes, pagos) en la carpeta <b>backups</b> del proyecto; quedan las últimas 14.
+              Cada día se guarda sola una copia de todo (citas, clientas, pagos) en la carpeta <b>backups</b> del proyecto; quedan las últimas 14.
               Para tenerla también fuera del computador, descárgala y guárdala en Drive o en una memoria USB.
             </p>
             <div className="small">{lastBackup ? `Última copia: ${lastBackup}` : 'Todavía no hay copias.'}</div>

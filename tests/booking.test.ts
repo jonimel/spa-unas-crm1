@@ -29,6 +29,9 @@ const asUser = async (phone: string): Promise<CurrentUser> => {
   return { ...u, tenant_name: t.name, tenant_slug: t.slug, timezone: t.timezone }
 }
 
+/** Cobro a la hora de la cita (el cobro solo se habilita 3 h antes de empezar). */
+const startOf = async (id: string) => new Date((await one<{ s: Date }>('select starts_at s from appointments where id = $1', [id]))!.s)
+
 describe('online booking', () => {
   it('books a free slot as pending, then refuses the same barber at the same time', async () => {
     const slots = await slotsFor(t, { branchId, durationMin: 45, ymd })
@@ -60,7 +63,7 @@ describe('online booking', () => {
     await expect(cancel(await asUser(other.phone), id)).rejects.toThrow('otra manicurista')
     const owner = await asUser(DEMO.owner.phone)
     await approve(owner, id)
-    await checkout(owner, id, 20000, 5000, 'nequi')
+    await checkout(owner, id, 20000, 5000, 'nequi', await startOf(id))
     const done = await one<{ status: string }>('select status from appointments where id = $1', [id])
     expect(done!.status).toBe('completed')
   })

@@ -11,7 +11,7 @@ import { computeSlots } from '@/lib/availability'
 import { requestBooking } from '@/app/r/[slug]/actions'
 import type { CurrentUser } from '@/lib/auth'
 import { DEMO } from '@/lib/seed'
-import { addDaysYmd, atLocal, todayYmd, weekdayOf } from '@/lib/time'
+import { addDaysYmd, atLocal, localParts, todayYmd, weekdayOf } from '@/lib/time'
 
 // Spa de uñas: varios servicios por cita, adicionales, comisión por línea y recordatorio de retoque.
 
@@ -26,6 +26,9 @@ const workday = (offset: number) => {
   while (weekdayOf(ymd) === 0) ymd = addDaysYmd(ymd, 1)
   return ymd
 }
+
+/** Cobro a la hora de la cita (el cobro solo se habilita 3 h antes de empezar). */
+const startOf = async (id: string) => new Date((await one<{ s: Date }>('select starts_at s from appointments where id = $1', [id]))!.s)
 
 beforeAll(async () => {
   await getDb()
@@ -128,7 +131,7 @@ describe('comisión por línea', () => {
       tenantId: t.id, branchId, serviceIds: [svc['Uñas acrílicas'].id, svc['Nail art (por uña)'].id, svc['Retiro de acrílico o polygel'].id],
       start: atLocal(ymd, 6 * 60, t.timezone), barberId: camila, clientName: 'Líneas', clientPhone: null, source: 'staff',
     })
-    await checkout(owner, id, 135000, 0, 'efectivo')
+    await checkout(owner, id, 135000, 0, 'efectivo', await startOf(id))
     const lines = await rows<{ name: string; charged: number; barber_share: number; rule: string }>(
       `select name, charged, barber_share, rule from appointment_services where appointment_id = $1 order by sort`,
       [id],
@@ -140,6 +143,22 @@ describe('comisión por línea', () => {
   })
 })
 
+describe('cobrar: solo desde 3 horas antes', () => {
+  it('no deja cobrar una cita de otro día; a 3 h o menos de empezar, sí', async () => {
+    const ymd = workday(16)
+    const start = atLocal(ymd, 6 * 60, t.timezone)
+    const id = await createAppointment({
+      tenantId: t.id, branchId, serviceIds: [svc['Manicure tradicional'].id], start, barberId: camila, clientName: 'Cobro Temprano', clientPhone: null, source: 'staff',
+    })
+    await expect(checkout(owner, id, 30000, 0, 'efectivo')).rejects.toThrow('3 horas antes')
+    await expect(checkout(owner, id, 30000, 0, 'efectivo', new Date(start.getTime() - 3 * 3600_000 - 60_000))).rejects.toBeInstanceOf(BookingError)
+    expect(await one('select 1 from payments where appointment_id = $1', [id])).toBeNull()
+    expect((await one<{ status: string }>('select status from appointments where id = $1', [id]))!.status).toBe('confirmed')
+    await checkout(owner, id, 30000, 0, 'efectivo', new Date(start.getTime() - 2 * 3600_000))
+    expect((await one<{ status: string }>('select status from appointments where id = $1', [id]))!.status).toBe('completed')
+  })
+})
+
 describe('recordatorio de retoque', () => {
   it('al cobrar un semipermanente agenda el mensaje para dentro de 15 días y lo envía si la clienta no volvió', async () => {
     const ymd = workday(12)
@@ -148,10 +167,10 @@ describe('recordatorio de retoque', () => {
       tenantId: t.id, branchId, serviceIds: [svc['Manicure semipermanente'].id, svc['Pedicure tradicional'].id],
       start: atLocal(ymd, 6 * 60, t.timezone), barberId: camila, clientName: 'Retoque Uno', clientPhone: phone, source: 'staff',
     })
-    await checkout(owner, id, 80000, 0, 'nequi')
+    await checkout(owner, id, 80000, 0, 'nequi', await startOf(id))
     const rem = (await one<{ due_at: Date; service_name: string }>(`select due_at, service_name from refill_reminders where appointment_id = $1`, [id]))!
     expect(rem.service_name).toBe('Manicure semipermanente')
-    expect(todayYmd(t.timezone, new Date(rem.due_at))).toBe(addDaysYmd(todayYmd(t.timezone), 15))
+    expect(todayYmd(t.timezone, new Date(rem.due_at))).toBe(addDaysYmd(ymd, 15))
 
     await runDueJobs(new Date(new Date(rem.due_at).getTime() - 60_000))
     expect(await one(`select 1 from messages where appointment_id = $1 and template = 'retoque'`, [id])).toBeNull()
@@ -174,7 +193,7 @@ describe('recordatorio de retoque', () => {
       tenantId: t.id, branchId, serviceIds: [svc['Uñas acrílicas'].id], start: atLocal(workday(13), 6 * 60, t.timezone), barberId: camila,
       clientName: 'Retoque Dos', clientPhone: phone, source: 'staff',
     })
-    await checkout(owner, id, 110000, 0, 'efectivo')
+    await checkout(owner, id, 110000, 0, 'efectivo', await startOf(id))
     const rem = (await one<{ id: string; due_at: Date }>(`select id, due_at from refill_reminders where appointment_id = $1`, [id]))!
     // ya reservó el retoque para dentro de un mes
     await createAppointment({
@@ -191,13 +210,13 @@ describe('recordatorio de retoque', () => {
       tenantId: t.id, branchId, serviceIds: [svc['Pedicure spa'].id], start: atLocal(workday(14), 6 * 60, t.timezone), barberId: camila,
       clientName: 'Sin Retoque', clientPhone: '3175550404', source: 'staff',
     })
-    await checkout(owner, a, 65000, 0, 'efectivo')
+    await checkout(owner, a, 65000, 0, 'efectivo', await startOf(a))
     expect(await one(`select 1 from refill_reminders where appointment_id = $1`, [a])).toBeNull()
     const b = await createAppointment({
       tenantId: t.id, branchId, serviceIds: [svc['Manicure semipermanente'].id], start: atLocal(workday(15), 6 * 60, t.timezone), barberId: camila,
       clientName: 'De paso', clientPhone: null, source: 'walkin',
     })
-    await checkout(owner, b, 45000, 0, 'efectivo')
+    await checkout(owner, b, 45000, 0, 'efectivo', await startOf(b))
     expect(await one(`select 1 from refill_reminders where appointment_id = $1`, [b])).toBeNull()
   })
 })
@@ -221,5 +240,23 @@ describe('datos de ejemplo', () => {
       [t.id],
     )
     expect(off!.n).toBe(0)
+  })
+
+  it('los retoques que ya tocaban quedan enviados a las 10 a. m. de su día, no a la hora de arranque', async () => {
+    const seeded = await rows<{ due_at: Date; sent_at: Date | null; skipped_at: Date | null; msg_at: Date | null; body: string | null }>(
+      `select r.due_at, r.sent_at, r.skipped_at, m.created_at msg_at, m.body
+         from refill_reminders r join appointments a on a.id = r.appointment_id
+         left join messages m on m.appointment_id = r.appointment_id and m.template = 'retoque'
+        where r.tenant_id = $1 and a.starts_at < now() and r.due_at <= now()`,
+      [t.id],
+    )
+    expect(seeded.length).toBeGreaterThan(0)
+    for (const r of seeded) {
+      if (r.skipped_at) continue
+      expect(new Date(r.sent_at!).getTime()).toBe(new Date(r.due_at).getTime())
+      expect(new Date(r.msg_at!).getTime()).toBe(new Date(r.due_at).getTime())
+      expect(localParts(new Date(r.due_at), t.timezone).minutes).toBe(10 * 60)
+      expect(r.body).toContain('desde tu última cita de ')
+    }
   })
 })

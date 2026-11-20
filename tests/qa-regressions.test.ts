@@ -36,6 +36,9 @@ beforeAll(async () => {
 const staff = (start: Date, barber: string) =>
   createAppointment({ tenantId: t.id, branchId, serviceId, start, barberId: barber, clientName: 'QA', clientPhone: null, source: 'staff' })
 
+/** Cobro a la hora de la cita (el cobro solo se habilita 3 h antes de empezar). */
+const startOf = async (id: string) => new Date((await one<{ s: Date }>('select starts_at s from appointments where id = $1', [id]))!.s)
+
 describe('QA: citas que agenda el equipo', () => {
   it('no acepta una manicurista de otro spa', async () => {
     const t2 = (await one<{ id: string }>(`insert into tenants (slug, name, timezone) values ('qa-otra', 'Otra', 'America/Bogota') returning id`))!.id
@@ -60,7 +63,8 @@ describe('QA: citas que agenda el equipo', () => {
 describe('QA: dos toques a la vez', () => {
   it('cobrar dos veces seguidas registra un solo pago y el segundo no es un error', async () => {
     const id = await staff(atLocal(ymd, 6 * 60, t.timezone), barberId)
-    const res = await Promise.allSettled([checkout(owner, id, 20000, 0, 'efectivo'), checkout(owner, id, 20000, 0, 'efectivo')])
+    const at = await startOf(id)
+    const res = await Promise.allSettled([checkout(owner, id, 20000, 0, 'efectivo', at), checkout(owner, id, 20000, 0, 'efectivo', at)])
     expect(res.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
     const failed = res.find((r) => r.status === 'rejected') as PromiseRejectedResult
     expect(failed.reason).toBeInstanceOf(AlreadyPaid)

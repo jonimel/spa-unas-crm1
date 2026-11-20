@@ -73,10 +73,18 @@ export type PayMethod = (typeof PAY_METHODS)[number]
 /** Cobrar la visita: registra el pago y deja la cita como atendida. */
 export class AlreadyPaid extends BookingError {}
 
-export async function checkout(user: CurrentUser, id: string, amount: number, tip: number, method: PayMethod) {
+/** Desde cuánto antes de la hora de inicio se puede cobrar una cita (el mismo margen del botón "Cobrar visita"). */
+export const CHARGE_WINDOW_MS = 3 * 3600_000
+
+export function canChargeAt(a: Pick<ApptView, 'status' | 'starts_at'>, now = new Date()) {
+  return ['confirmed', 'pending'].includes(a.status) && new Date(a.starts_at).getTime() - now.getTime() < CHARGE_WINDOW_MS
+}
+
+export async function checkout(user: CurrentUser, id: string, amount: number, tip: number, method: PayMethod, now = new Date()) {
   const a = await loadForUser(user, id)
   if (a.status === 'completed' && a.paid_amount !== null) throw new AlreadyPaid('Esta visita ya estaba cobrada')
   if (!['confirmed', 'pending'].includes(a.status)) throw new BookingError('Esta cita no se puede cobrar')
+  if (!canChargeAt(a, now)) throw new BookingError('Esta cita todavía no se puede cobrar: el cobro se habilita 3 horas antes de la hora de inicio.')
   if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(tip) || tip < 0) throw new BookingError('Revisa el valor')
   if (!PAY_METHODS.includes(method)) throw new BookingError('Elige el medio de pago')
   await tx(async (on) => {
@@ -96,7 +104,7 @@ export async function checkout(user: CurrentUser, id: string, amount: number, ti
     )
     // comisión congelada al cobrar (por servicio), con el esquema vigente de la manicurista
     await settlePending(on, a.tenant_id)
-    await scheduleRefill(on, a)
+    await scheduleRefill(on, a, now)
   }).catch(async (e) => {
     const now = await apptView(id)
     if (now?.status === 'completed' && now.paid_amount !== null) throw new AlreadyPaid('Esta visita ya estaba cobrada')

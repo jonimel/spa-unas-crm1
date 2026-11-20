@@ -15,10 +15,10 @@ export default function Home() {
         Tu spa, <em>en orden</em>
       </h2>
       <p className="muted" style={{ lineHeight: 1.5 }}>
-        Reservas por link, agenda de cada manicurista, cobros, pagos al equipo y clientes. Desde el celular, sin descargar nada.
+        Reservas por link, agenda de cada manicurista, cobros, pagos al equipo y clientas. Desde el celular, sin descargar nada.
       </p>
 
-      <div className="eyebrow">Clientes</div>
+      <div className="eyebrow">Clientas</div>
       <Link className="role role-client" href="/reservar">
         <span className="ri">
           <Icon name="cal" />

@@ -10,7 +10,7 @@ export const STARTER_SERVICES = [
   { name: 'Pedicure tradicional', description: 'Limado, cutícula y esmaltado', duration: 60, price: 35000, addon: false, refill: null },
   { name: 'Uñas acrílicas', description: 'Set completo', duration: 120, price: 110000, addon: false, refill: 21 },
   { name: 'Retiro de semipermanente', description: null, duration: 15, price: 8000, addon: true, refill: null },
-  { name: 'Nail art (por uña)', description: 'Decoración por uña', duration: 15, price: 5000, addon: true, refill: null },
+  { name: 'Nail art (por uña)', description: 'Diseño a mano, desde $5.000 por uña', duration: 15, price: 5000, addon: true, refill: null },
 ]
 
 /** Freno a altas en serie (robots): como mucho estas spas nuevos por hora en todo el sistema. */

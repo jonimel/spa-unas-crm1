@@ -75,7 +75,7 @@ await anon.goto(BASE + '/')
 const home = await anon.locator('body').innerText()
 if (!/localhost|127\.0\.0\.1/.test(BASE)) check(!/PIN \d{4}/.test(home), 'en internet la página de inicio no muestra los PIN de prueba')
 check(/Registrar mi spa/.test(home), 'la página de inicio invita a registrar un spa')
-check(/Reservar una cita/.test(home) && /Dueño \/ Administrador/.test(home) && /Manicurista/.test(home), 'el inicio separa clientes (Reservar) del equipo (Dueño / Manicurista)')
+check(/Reservar una cita/.test(home) && /Dueño \/ Administrador/.test(home) && /Manicurista/.test(home), 'el inicio separa clientas (Reservar) del equipo (Dueño / Manicurista)')
 await anon.goto(BASE + '/entrar')
 const entrar = await anon.locator('body').innerText()
 check(/Dueño \/ Administrador/.test(entrar) && /Manicurista/.test(entrar), 'Entrar pide elegir Dueño / Administrador o Manicurista')
@@ -83,7 +83,7 @@ for (const u of [`/r/${SLUG}`, '/reservar']) {
   await anon.goto(BASE + u)
   const t = await anon.locator('body').innerText()
   const staffLinks = await anon.locator('a[href^="/entrar"], a[href^="/app"], input[name=pin]').count()
-  check(staffLinks === 0 && !/\bPIN\b/.test(t), `la pantalla de clientes ${u} no muestra nada del equipo`)
+  check(staffLinks === 0 && !/\bPIN\b/.test(t), `la pantalla de clientas ${u} no muestra nada del equipo`)
 }
 await anon.goto(BASE + '/reservar')
 check((await anon.locator(`a[href="/r/${SLUG}"]`).count()) > 0, 'Reservar lista el spa y lleva a su link')
@@ -128,7 +128,7 @@ const bk = await barber.request.get(BASE + '/api/backup', { maxRedirects: 0 })
 check(!(bk.headers()['content-type'] || '').includes('gzip'), 'la manicurista no descarga la copia de seguridad')
 
 if (!READONLY) {
-  // ---------- 3. el cliente reserva ----------
+  // ---------- 3. la clienta reserva ----------
   const client = await page('cliente')
   await client.goto(`${BASE}/r/${SLUG}`)
   const branchGroup = client.getByRole('group', { name: 'Sede' })
@@ -172,14 +172,50 @@ if (!READONLY) {
     await client.reload()
     check(/confirmada/i.test(await client.locator('body').innerText()), 'la clienta ve la cita confirmada')
 
-    // ---------- 5. cobrar con doble toque ----------
-    await mine.goto(`${BASE}/app/cobrar/${apptId}`)
-    const pay = mine.getByRole('button', { name: /Registrar pago/ })
-    // el segundo toque puede llegar cuando la página ya se fue (la página sale apenas se registra el pago)
-    await Promise.all([pay.click({ timeout: 10000 }).catch(() => {}), pay.click({ force: true, noWaitAfter: true }).catch(() => {})])
-    await mine.waitForURL(/agenda|cobrar/, { timeout: 15000 })
-    await mine.waitForTimeout(1500)
-    check(/\/app\/agenda/.test(mine.url()) && !/err=/.test(mine.url()), 'doble toque en "Registrar pago" termina bien, sin error')
+    // ---------- 5. cobrar: no antes de 3 h; luego doble toque en una clienta de paso ----------
+    await mine.goto(`${BASE}/app/cita/${apptId}`)
+    const chargeable = (await mine.getByRole('link', { name: /Cobrar visita/ }).count()) > 0
+    if (!chargeable) {
+      await mine.goto(`${BASE}/app/cobrar/${apptId}`)
+      await mine.getByRole('button', { name: /Registrar pago/ }).click()
+      await mine.waitForURL(/err=/, { timeout: 15000 })
+      check(/3 horas antes/.test(await mine.locator('body').innerText()), 'una cita de más tarde no se deja cobrar antes de tiempo (aviso claro)')
+    }
+    // clienta de paso "ahora" (el dueño prueba con cada manicurista hasta encontrar una libre)
+    let payPage = null
+    let lastErr = ''
+    const nOpts = await (async () => { await owner.goto(BASE + '/app/nueva'); return owner.locator('#barber option').count() })()
+    for (let i = 0; i < nOpts && !payPage; i++) {
+      await owner.goto(BASE + '/app/nueva')
+      await owner.locator('#barber').selectOption({ index: i })
+      await owner.fill('#name', 'QA Clienta de Paso')
+      await owner.getByRole('button', { name: 'Guardar' }).click()
+      await owner.waitForURL(/cobrar|err=/, { timeout: 15000 }).catch(() => {})
+      if (/\/app\/cobrar\//.test(owner.url())) payPage = owner
+      else lastErr = decodeURIComponent(owner.url().split('err=')[1] ?? owner.url())
+    }
+    if (!payPage) {
+      // todas ocupadas ahora: se cobra una cita de hoy que ya está en su hora (o por empezar)
+      await owner.goto(BASE + '/app/agenda')
+      const ids = await owner.locator('a.ap.is-confirmed, a.ap.is-pending').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+      for (const href of ids) {
+        await owner.goto(BASE + href)
+        if (await owner.getByRole('link', { name: /Cobrar visita/ }).count()) {
+          await owner.goto(BASE + href.replace('/app/cita/', '/app/cobrar/'))
+          payPage = owner
+          break
+        }
+      }
+    }
+    check(!!payPage, `hay una visita lista para cobrar (clienta de paso o cita en su hora)${payPage ? '' : ` (${lastErr})`}`)
+    if (payPage) {
+      const pay = payPage.getByRole('button', { name: /Registrar pago/ })
+      // el segundo toque puede llegar cuando la página ya se fue (la página sale apenas se registra el pago)
+      await Promise.all([pay.click({ timeout: 10000 }).catch(() => {}), pay.click({ force: true, noWaitAfter: true }).catch(() => {})])
+      await payPage.waitForURL(/agenda|cobrar/, { timeout: 15000 })
+      await payPage.waitForTimeout(1500)
+      check(/\/app\/agenda/.test(payPage.url()) && !/err=/.test(payPage.url()), 'doble toque en "Registrar pago" termina bien, sin error')
+    }
   }
 
   // ---------- 6. WhatsApp (simulado) ----------

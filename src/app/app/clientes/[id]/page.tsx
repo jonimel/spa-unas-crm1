@@ -46,7 +46,7 @@ export default async function Cliente({ params, searchParams }: PageProps<'/app/
         <div className="grow">
           <div style={{ fontFamily: 'var(--f-display)', fontSize: 28, lineHeight: 1 }}>{c.name}</div>
           <div className="small muted">
-            {c.phone ? `+57 ${fmtPhone(c.phone)}` : 'Sin celular'} · cliente desde {fmtDay(new Date(c.created_at), tz)}
+            {c.phone ? `+57 ${fmtPhone(c.phone)}` : 'Sin celular'} · clienta desde {fmtDay(new Date(c.created_at), tz)}
           </div>
         </div>
       </div>

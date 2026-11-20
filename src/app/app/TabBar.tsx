@@ -9,13 +9,13 @@ const TABS = {
     { href: '/app/agenda', label: 'Agenda', icon: 'cal' },
     { href: '/app/analisis', label: 'Análisis', icon: 'chart' },
     { href: '/app/comisiones', label: 'Pagos', icon: 'cash' },
-    { href: '/app/clientes', label: 'Clientes', icon: 'users' },
+    { href: '/app/clientes', label: 'Clientas', icon: 'users' },
     { href: '/app/ajustes', label: 'Ajustes', icon: 'gear' },
   ],
   barber: [
     { href: '/app/agenda', label: 'Mi agenda', icon: 'cal' },
     { href: '/app/comisiones', label: 'Pagos', icon: 'cash' },
-    { href: '/app/clientes', label: 'Clientes', icon: 'users' },
+    { href: '/app/clientes', label: 'Clientas', icon: 'users' },
     { href: '/app/cuenta', label: 'Cuenta', icon: 'polish' },
   ],
 }

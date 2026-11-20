@@ -30,15 +30,15 @@ export default async function Clientes({ searchParams }: PageProps<'/app/cliente
   )
   return (
     <main>
-      <Top title="Clientes" sub={`${list.length}${list.length === 100 ? '+' : ''} ${q ? 'encontrados' : 'en total'}`} />
+      <Top title="Clientas" sub={`${list.length}${list.length === 100 ? '+' : ''} ${q ? 'encontradas' : 'en total'}`} />
       <form className="field" style={{ marginTop: 6 }}>
         <div className="in">
           <Icon name="search" style={{ color: 'var(--muted)' }} />
-          <input name="q" defaultValue={q} placeholder="Buscar por nombre o celular" type="search" aria-label="Buscar cliente" />
+          <input name="q" defaultValue={q} placeholder="Buscar por nombre o celular" type="search" aria-label="Buscar clienta" />
         </div>
       </form>
       <div className="list" style={{ marginTop: 8 }}>
-        {list.length === 0 && <div className="empty">No encontramos clientes{q ? ` con “${q}”` : ''}.</div>}
+        {list.length === 0 && <div className="empty">No encontramos clientas{q ? ` con “${q}”` : ''}.</div>}
         {list.map((c) => (
           <Link key={c.id} href={`/app/clientes/${c.id}`} className="li">
             <Avatar name={c.name} sm />

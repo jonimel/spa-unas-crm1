@@ -13,6 +13,9 @@ import type { CurrentUser } from '@/lib/auth'
 import { DEMO } from '@/lib/seed'
 import { addDaysYmd, todayYmd, weekdayOf } from '@/lib/time'
 
+/** Cobro a la hora de la cita (el cobro solo se habilita 3 h antes de empezar). */
+const startOf = async (id: string) => new Date((await one<{ s: Date }>('select starts_at s from appointments where id = $1', [id]))!.s)
+
 let t: Tenant
 let owner: CurrentUser
 
@@ -38,7 +41,7 @@ describe('commissions', () => {
     const slot = (await slotsFor(t, { branchId: camila.branch_id, durationMin: 120, ymd, barberId: camila.id }))[0]
     const id = await createAppointment({ tenantId: t.id, branchId: camila.branch_id, serviceId: svc.id, start: slot.start, barberId: camila.id, clientName: 'Prueba Comisión', clientPhone: '3190000099', source: 'online' })
     await approve(owner, id)
-    await checkout(owner, id, 110000, 5000, 'efectivo')
+    await checkout(owner, id, 110000, 5000, 'efectivo', await startOf(id))
     const p = (await one<{ barber_share: number; barber_tip: number; shop_share: number; rule: string }>(`select barber_share, barber_tip, shop_share, rule from payments where appointment_id = $1`, [id]))!
     expect(p).toMatchObject({ barber_share: 60500, barber_tip: 5000, shop_share: 49500 })
     expect(p.rule).toContain('55%')

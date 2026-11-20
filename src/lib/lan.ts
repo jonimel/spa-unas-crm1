@@ -16,6 +16,6 @@ export function printPhoneLinks(slug = DEMO.slug) {
   const ips = lanAddresses()
   if (!ips.length) return
   console.log('\n📱 Desde el celular (conectado al mismo Wi-Fi):')
-  for (const ip of ips) console.log(`   Reservas de clientes: http://${ip}:${port}/r/${slug}    ·    Equipo: http://${ip}:${port}/entrar`)
+  for (const ip of ips) console.log(`   Reservas de clientas: http://${ip}:${port}/r/${slug}    ·    Equipo: http://${ip}:${port}/entrar`)
   console.log('')
 }

@@ -25,7 +25,7 @@ export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
 
   return (
     <main>
-      <Top title="Nueva cita" sub="Cliente de paso o cita por teléfono" back="/app/agenda" />
+      <Top title="Nueva cita" sub="Clienta de paso o cita por teléfono" back="/app/agenda" />
       <Flash err={sp.err as string} />
       <form action={newAppointmentAction} className="stack" style={{ gap: 14, marginTop: 8 }}>
         <div className="eyebrow" style={{ marginBottom: 0 }}>
@@ -120,11 +120,11 @@ export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
         )}
 
         <div className="eyebrow" style={{ marginBottom: 0 }}>
-          Cliente
+          Clienta
         </div>
         <div className="field">
           <label htmlFor="phone">Celular (opcional)</label>
-          <PhoneInput id="phone" name="phone" placeholder="Si ya es cliente, lo reconocemos" />
+          <PhoneInput id="phone" name="phone" placeholder="Si ya es clienta, la reconocemos" />
         </div>
         <div className="field">
           <label htmlFor="name">Nombre</label>

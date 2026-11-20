@@ -39,7 +39,7 @@ export const TEMPLATES = {
   retoque: {
     to: 'client',
     params: ['nombre', 'spa', 'servicio', 'dias', 'link'],
-    text: 'Hola {nombre} 💅 ¡Es hora de tu retoque! Ya van {dias} días desde tu {servicio} en {spa}. Reserva tu próxima cita aquí: {link}',
+    text: 'Hola {nombre} 💅 ¡Es hora de tu retoque! Ya van {dias} días desde tu última cita de {servicio} en {spa}. Reserva tu próxima cita aquí: {link}',
   },
   manicurista_nueva_solicitud: {
     to: 'barber',

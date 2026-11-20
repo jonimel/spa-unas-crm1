@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto'
 import type { PGlite, Transaction } from '@electric-sql/pglite'
 import { computeShare, type Scheme, type ShopRules } from './commission'
 import { DEMO_CATALOG, pickCombo } from './demo-catalog'
+import { bookingLink } from './booking'
+import { firstName } from './phone'
 import { hashPin, verifyPin } from './pin'
+import { render } from './whatsapp'
 import { addDaysYmd, atLocal, fmtYmdShort, localParts, todayYmd, weekdayOf } from './time'
 
 /**
@@ -283,15 +286,30 @@ export async function seedIfEmpty(db: PGlite) {
     await q(`update clients set allergies = $2, favorite_colors = $3 where id = $1`, [named[2], 'Alergia al látex: usar guantes de nitrilo.', 'Tonos pastel, lila'])
     await q(`update clients set favorite_colors = $2, notes = $3 where id = $1`, [named[5], 'Francés clásico, blanco leche', 'Viene cada 3 semanas, casi siempre el sábado.'])
 
-    // ---------- recordatorios de retoque de las visitas recientes (algunos ya tocan y salen al arrancar) ----------
+    // ---------- recordatorios de retoque de las visitas recientes ----------
+    // Los que ya tocaron quedan enviados a las 10 a. m. de su día (con su mensaje), como si el sistema hubiera
+    // estado corriendo; los demás quedan pendientes y salen solos cuando llegue su día.
+    const clientInfo = new Map(clientRows.map((r) => [r[0] as string, { name: r[2] as string, phone: r[3] as string | null }]))
     const refills: unknown[][] = []
+    const sentMsgs: unknown[][] = []
     for (const [client, v] of lastVisit) {
       if (v.status !== 'completed' || v.ymd < addDaysYmd(today, -25)) continue
       const line = v.svc.filter((x) => refillDays.has(x.id)).sort((a, b) => refillDays.get(a.id)! - refillDays.get(b.id)!)[0]
       if (!line) continue
-      refills.push([t.id, client, v.id, line.name, atLocal(addDaysYmd(v.ymd, refillDays.get(line.id)!), 10 * 60, TZ), v.start])
+      const due = atLocal(addDaysYmd(v.ymd, refillDays.get(line.id)!), 10 * 60, TZ)
+      const c = clientInfo.get(client)
+      const sent = due <= now && !!c?.phone
+      refills.push([t.id, client, v.id, line.name, due, v.start, sent ? due : null, due <= now && !sent ? due : null])
+      if (sent) {
+        const vars = {
+          nombre: firstName(c.name), spa: 'Spa Uñas Bella', servicio: line.name.toLowerCase(),
+          dias: String(Math.max(1, Math.round((due.getTime() - v.start.getTime()) / 864e5))), link: bookingLink(DEMO.slug),
+        }
+        sentMsgs.push([t.id, c.phone, 'client', 'retoque', render('retoque', vars), v.id, 'simulated', due])
+      }
     }
-    await insertMany(tx, 'refill_reminders', ['tenant_id', 'client_id', 'appointment_id', 'service_name', 'due_at', 'created_at'], refills)
+    await insertMany(tx, 'refill_reminders', ['tenant_id', 'client_id', 'appointment_id', 'service_name', 'due_at', 'created_at', 'sent_at', 'skipped_at'], refills)
+    await insertMany(tx, 'messages', ['tenant_id', 'to_phone', 'to_kind', 'template', 'body', 'appointment_id', 'status', 'created_at'], sentMsgs)
 
     // ---------- pagos a las manicuristas ----------
     // Cada lunes la dueña les paga lo de la semana anterior; a veces un adelanto el miércoles.

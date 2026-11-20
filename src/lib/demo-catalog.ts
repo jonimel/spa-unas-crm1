@@ -31,7 +31,7 @@ export const DEMO_CATALOG: CatalogItem[] = [
   // adicionales: se eligen después de los servicios principales
   { name: 'Retiro de semipermanente', description: null, duration: 15, price: 8000, addon: true },
   { name: 'Retiro de acrílico o polygel', description: null, duration: 30, price: 20000, addon: true },
-  { name: 'Nail art (por uña)', description: 'Decoración por uña: ajusta el valor al cobrar', duration: 15, price: 5000, addon: true },
+  { name: 'Nail art (por uña)', description: 'Diseño a mano, desde $5.000 por uña', duration: 15, price: 5000, addon: true },
   { name: 'Reparación de uña', description: 'Por uña', duration: 15, price: 7000, addon: true },
   { name: 'Parafina para manos', description: 'Hidratación profunda', duration: 15, price: 12000, addon: true },
 ]

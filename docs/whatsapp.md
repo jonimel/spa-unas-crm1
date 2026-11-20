@@ -14,7 +14,7 @@ Para enviarlos de verdad:
 | `cita_rechazada` | cliente | nombre, fecha, hora, link |
 | `cita_cancelada` | cliente | nombre, fecha, hora, link |
 | `recordatorio` | cliente | nombre, hora, manicurista, sede |
-| `retoque` | cliente | nombre, spa, servicio, días, link |
+| `retoque` | clienta | nombre, spa, servicio, días, link |
 | `manicurista_nueva_solicitud` | manicurista | manicurista, cliente, servicio, fecha, hora, límite |
 | `dueno_sin_respuesta` | dueño | manicurista, cliente, fecha, hora |
 

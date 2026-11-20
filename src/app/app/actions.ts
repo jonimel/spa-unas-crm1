@@ -36,7 +36,7 @@ export async function approveAction(fd: FormData) {
   const to = s(fd, 'back') || '/app/agenda'
   await guard(to, () => approve(user, s(fd, 'id')))
   revalidatePath('/app', 'layout')
-  back(to, { ok: 'Cita confirmada. Le avisamos al cliente por WhatsApp.' })
+  back(to, { ok: 'Cita confirmada. Le avisamos a la clienta por WhatsApp.' })
 }
 
 export async function rejectAction(fd: FormData) {
@@ -44,7 +44,7 @@ export async function rejectAction(fd: FormData) {
   const to = s(fd, 'back') || '/app/agenda'
   await guard(to, () => reject(user, s(fd, 'id'), s(fd, 'reason') || undefined))
   revalidatePath('/app', 'layout')
-  back(to, { ok: 'Solicitud rechazada. El cliente recibió el link para elegir otra hora.' })
+  back(to, { ok: 'Solicitud rechazada. La clienta recibió el link para elegir otra hora.' })
 }
 
 export async function cancelAction(fd: FormData) {
@@ -52,7 +52,7 @@ export async function cancelAction(fd: FormData) {
   const id = s(fd, 'id')
   await guard(`/app/cita/${id}`, () => cancel(user, id, s(fd, 'reason') || undefined))
   revalidatePath('/app', 'layout')
-  back(`/app/cita/${id}`, { ok: 'Cita cancelada. Le avisamos al cliente.' })
+  back(`/app/cita/${id}`, { ok: 'Cita cancelada. Le avisamos a la clienta.' })
 }
 
 export async function noShowAction(fd: FormData) {
@@ -75,7 +75,7 @@ export async function checkoutAction(fd: FormData) {
   back('/app/agenda', { ok: 'Visita cobrada ✓' })
 }
 
-/** Cliente de paso o cita agendada por la manicurista/dueño (queda confirmada de una). */
+/** Clienta de paso o cita agendada por la manicurista/dueño (queda confirmada de una). */
 export async function newAppointmentAction(fd: FormData) {
   const user = await requireUser()
   const t = (await tenantById(user.tenant_id))!
@@ -90,11 +90,11 @@ export async function newAppointmentAction(fd: FormData) {
   const rawPhone = s(fd, 'phone')
   const phone = rawPhone ? normalizeCoPhone(rawPhone) : null
   if (rawPhone && !phone) back(to, { err: PHONE_ERROR })
-  const name = s(fd, 'name') || (phone ? '' : 'Cliente de paso')
+  const name = s(fd, 'name') || (phone ? '' : 'Clienta de paso')
   let clientName = name
   if (!clientName && phone) {
     const c = await one<{ name: string }>('select name from clients where tenant_id = $1 and phone = $2', [t.id, phone])
-    clientName = c?.name ?? 'Cliente'
+    clientName = c?.name ?? 'Clienta'
   }
   let start: Date
   if (s(fd, 'when') === 'now') {
@@ -121,7 +121,7 @@ export async function newAppointmentAction(fd: FormData) {
     }),
   )
   revalidatePath('/app', 'layout')
-  if (s(fd, 'when') === 'now') redirect(`/app/cobrar/${id}?ok=${encodeURIComponent('Cliente de paso registrado. Cobra cuando termines.')}`)
+  if (s(fd, 'when') === 'now') redirect(`/app/cobrar/${id}?ok=${encodeURIComponent('Clienta de paso registrada. Cobra cuando termines.')}`)
   back(`/app/agenda?date=${localParts(start, t.timezone).ymd}`, { ok: 'Cita agendada' })
 }
 

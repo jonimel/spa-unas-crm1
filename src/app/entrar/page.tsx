@@ -8,7 +8,7 @@ import { STAFF_ROLES } from './roles'
 export const metadata = { title: 'Entrar · Equipo' }
 
 // Entrada del equipo: primero se elige quién eres (dueño o manicurista) y después celular + PIN.
-// Los clientes no entran aquí: reservan desde el link de su spa (/r/...) o desde /reservar.
+// Las clientas no entran aquí: reservan desde el link de su spa (/r/...) o desde /reservar.
 export default async function Entrar() {
   if (await currentUser()) redirect('/app')
   return (
@@ -43,7 +43,7 @@ export default async function Entrar() {
           <Icon name="cal" style={{ color: 'var(--brass)' }} />
           <div className="grow small">
             <b>¿Quieres reservar una cita?</b>
-            <div className="muted">Los clientes no necesitan cuenta.</div>
+            <div className="muted">Las clientas no necesitan cuenta.</div>
           </div>
           <Link className="link small" href="/reservar" style={{ display: 'grid', placeItems: 'center' }}>
             Reservar
