@@ -25,6 +25,7 @@ function categoryOf(name: string) {
   return 'Servicios'
 }
 const CATEGORY_ORDER = ['Manos', 'Pies', 'Extensiones y refuerzo', 'Servicios']
+const catId = (c: string) => 'cat-' + c.toLowerCase().replace(/[^a-z]+/g, '-')
 
 function Welcome({ branch }: { branch: { name: string; address: string | null } | null }) {
   return (
@@ -281,6 +282,20 @@ export function BookingFlow(props: {
         <p className="small muted" style={{ margin: '-4px 2px 10px' }}>
           Puedes elegir varios, por ejemplo manos y pies en la misma cita.
         </p>
+        {showCats && (
+          <nav className="chips cat-jump" aria-label="Ir a la categoría" style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)', padding: '8px 0', margin: '0 0 4px' }}>
+            {CATEGORY_ORDER.filter((c) => mains.some((s) => categoryOf(s.name) === c)).map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="chip"
+                onClick={() => document.getElementById(catId(c))?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >
+                {c === 'Extensiones y refuerzo' ? 'Extensiones' : c}
+              </button>
+            ))}
+          </nav>
+        )}
         <div className="stack" role="group" aria-label="Servicios">
           {groupedMains.map((s, i) => {
             const on = serviceIds.includes(s.id)
@@ -288,7 +303,11 @@ export function BookingFlow(props: {
             const heading = showCats && (i === 0 || categoryOf(groupedMains[i - 1].name) !== cat)
             return (
               <div key={s.id} className="stack" style={{ gap: 0 }}>
-              {heading && <div className="svc-cat" style={i === 0 ? { marginTop: 4 } : undefined}>{cat}</div>}
+              {heading && (
+                <div className="svc-cat" id={catId(cat)} style={{ scrollMarginTop: 64, ...(i === 0 ? { marginTop: 4 } : {}) }}>
+                  {cat}
+                </div>
+              )}
               <button className={'opt multi svc' + (on ? ' on' : '')} aria-pressed={on} onClick={() => toggle(s.id)}>
                 <span className="grow">
                   <span className="t">{s.name}</span>
@@ -394,15 +413,24 @@ export function BookingFlow(props: {
                   Cualquiera<small>El primero libre</small>
                 </span>
               </button>
-              {branchBarbers.map((b) => (
-                <button key={b.id} className={'bchip' + (filter === b.id ? ' on' : '')} onClick={() => { setFilter(b.id); setSlot(null) }}>
-                  <span className="av">{initials(b.name)}</span>
-                  <span>
-                    {short(b.name)}
-                    <small>{(avail?.slots ?? []).filter((s) => s.barberIds.includes(b.id)).length} libres</small>
-                  </span>
-                </button>
-              ))}
+              {branchBarbers.map((b) => {
+                const n = (avail?.slots ?? []).filter((s) => s.barberIds.includes(b.id)).length
+                const none = !loading && n === 0
+                return (
+                  <button
+                    key={b.id}
+                    className={'bchip' + (filter === b.id ? ' on' : '') + (none ? ' none' : '')}
+                    style={none && filter !== b.id ? { opacity: 0.55 } : undefined}
+                    onClick={() => { setFilter(b.id); setSlot(null) }}
+                  >
+                    <span className="av">{initials(b.name)}</span>
+                    <span>
+                      {short(b.name)}
+                      <small>{loading ? '…' : n === 0 ? 'Sin horas este día' : n === 1 ? '1 hora libre' : `${n} horas libres`}</small>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </>
         )}

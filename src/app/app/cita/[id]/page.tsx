@@ -73,7 +73,7 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
             <span>{i === 0 ? (a.lines.length > 1 ? 'Servicios' : 'Servicio') : ''}</span>
             <span>
               {l.is_addon ? '+ ' : ''}
-              {l.name} · {l.duration_min} min · {fmtMoney(l.price)}
+              {l.name} · {fmtDuration(l.duration_min)} · {fmtMoney(l.price)}
             </span>
           </div>
         ))}
@@ -191,7 +191,7 @@ export default async function Cita({ params, searchParams }: PageProps<'/app/cit
             {msgs.map((m, i) => (
               <div key={i}>
                 <div className="small muted" style={{ marginBottom: 4 }}>
-                  Para {m.to_kind === 'client' ? 'la clienta' : m.to_kind === 'barber' ? 'la manicurista' : 'el dueño'} · {fmtTime(new Date(m.created_at), tz)}
+                  Para {m.to_kind === 'client' ? 'la clienta' : m.to_kind === 'barber' ? 'la manicurista' : 'la dueña'} · {fmtTime(new Date(m.created_at), tz)}
                   {m.status === 'simulated' ? ' · simulado' : m.status === 'failed' ? ' · falló' : ''}
                 </div>
                 <div className="bubble">{m.body}</div>

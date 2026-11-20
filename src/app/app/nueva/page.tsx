@@ -1,11 +1,10 @@
-import { Icon } from '@/components/Icon'
-import { PhoneInput } from '@/components/PhoneInput'
 import { Flash, Top } from '@/components/ui'
 import { requireUser } from '@/lib/auth'
 import { bookingCatalog } from '@/lib/booking'
 import { rows } from '@/lib/db'
-import { fmtDuration, fmtMoney, localParts, todayYmd } from '@/lib/time'
+import { localParts, todayYmd } from '@/lib/time'
 import { newAppointmentAction } from '../actions'
+import { NuevaForm } from './NuevaForm'
 
 export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
   const user = await requireUser()
@@ -27,123 +26,14 @@ export default async function Nueva({ searchParams }: PageProps<'/app/nueva'>) {
     <main>
       <Top title="Nueva cita" sub="Clienta de paso o cita por teléfono" back="/app/agenda" />
       <Flash err={sp.err as string} />
-      <form action={newAppointmentAction} className="stack" style={{ gap: 14, marginTop: 8 }}>
-        <div className="eyebrow" style={{ marginBottom: 0 }}>
-          ¿Cuándo?
-        </div>
-        <div className="seg">
-          <label>
-            <input type="radio" name="when" value="now" defaultChecked />
-            <span>
-              <Icon name="walk" /> Ahora (de paso)
-            </span>
-          </label>
-          <label>
-            <input type="radio" name="when" value="later" />
-            <span>
-              <Icon name="cal" /> Otro día / hora
-            </span>
-          </label>
-        </div>
-        <div className="grid2">
-          <div className="field">
-            <label htmlFor="date">Día</label>
-            <div className="in">
-              <input id="date" name="date" type="date" defaultValue={todayYmd(user.timezone)} />
-            </div>
-          </div>
-          <div className="field">
-            <label htmlFor="time">Hora</label>
-            <div className="in">
-              <input id="time" name="time" type="time" defaultValue={hh} />
-            </div>
-          </div>
-        </div>
-        <p className="small muted" style={{ margin: '-6px 2px 0' }}>
-          Día y hora solo aplican si eliges “Otro día / hora”.
-        </p>
-
-        {user.role === 'owner' && (
-          <div className="field">
-            <label htmlFor="barber">Manicurista</label>
-            <div className="in">
-              <select id="barber" name="barber" required>
-                {barbers.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.branch ? ` · ${b.branch}` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        <div className="eyebrow" style={{ marginBottom: 0 }}>
-          Servicios
-        </div>
-        <p className="small muted" style={{ margin: '-6px 2px 0' }}>
-          Puedes marcar varios (por ejemplo manos y pies). La duración y el precio son la suma.
-        </p>
-        <div className="stack" role="group" aria-label="Servicios">
-          {services
-            .filter((s) => !s.is_addon)
-            .map((s, i) => (
-              <label key={s.id} className="opt multi">
-                <input type="checkbox" name="service" value={s.id} defaultChecked={i === 0} />
-                <span className="grow">
-                  <div className="t">{s.name}</div>
-                  <div className="d">{fmtDuration(s.duration_min)}</div>
-                </span>
-                <span className="price">{fmtMoney(s.price)}</span>
-              </label>
-            ))}
-        </div>
-        {services.some((s) => s.is_addon) && (
-          <>
-            <div className="svc-cat">Adicionales</div>
-            <div className="stack" role="group" aria-label="Adicionales">
-              {services
-                .filter((s) => s.is_addon)
-                .map((s) => (
-                  <label key={s.id} className="opt multi addon">
-                    <input type="checkbox" name="service" value={s.id} />
-                    <span className="grow">
-                      <div className="t">{s.name}</div>
-                      <div className="d">+{fmtDuration(s.duration_min)}</div>
-                    </span>
-                    <span className="price">+{fmtMoney(s.price)}</span>
-                  </label>
-                ))}
-            </div>
-          </>
-        )}
-
-        <div className="eyebrow" style={{ marginBottom: 0 }}>
-          Clienta
-        </div>
-        <div className="field">
-          <label htmlFor="phone">Celular (opcional)</label>
-          <PhoneInput id="phone" name="phone" placeholder="Si ya es clienta, la reconocemos" />
-        </div>
-        <div className="field">
-          <label htmlFor="name">Nombre</label>
-          <div className="in">
-            <input id="name" name="name" placeholder="Opcional si pusiste el celular" />
-          </div>
-        </div>
-        <div className="field">
-          <label htmlFor="note">Nota (opcional)</label>
-          <div className="in">
-            <input id="note" name="note" />
-          </div>
-        </div>
-        <div className="cta">
-          <button className="btn" type="submit">
-            Guardar
-          </button>
-        </div>
-      </form>
+      <NuevaForm
+        action={newAppointmentAction}
+        services={services}
+        barbers={barbers}
+        isOwner={user.role === 'owner'}
+        today={todayYmd(user.timezone)}
+        hh={hh}
+      />
     </main>
   )
 }

@@ -94,3 +94,53 @@ También cambió el estilo de lo que ya existía: los botones son píldoras con 
 7. **Nombres en mayúsculas**: `clientes/[id]/page.tsx` y `r/[slug]/cita/[id]/page.tsx` ponen `textTransform: 'uppercase'` en textos con la fuente de títulos. Quitarlo.
 8. **Equipo**: usar `<Icon name="polish" />` para el rol de manicurista (inicio, Entrar, ajustes) en lugar de `sc`.
 9. **Confirmación de cita** (`r/[slug]/cita/[id]`): un `.done-mark` arriba del título se ve como "listo, te esperamos".
+
+## Ronda 2: lo que ya cambió en el CSS (no requiere markup)
+
+- **Tarjeta de servicio** (`.opt.svc`): ahora es una cuadrícula. Arriba van el nombre y la casilla; debajo, la descripción a todo el ancho; al pie, la duración a la izquierda y el precio grande a la derecha. Los adicionales (`.opt.svc.addon`) van en una sola fila: nombre, +precio y casilla. La casilla hace un pequeño "pop" al marcarla.
+- **Barra inferior** (`.cta`): es una barra sólida con desenfoque, borde y sombra. El contenido ya no se ve por detrás del total ni del botón.
+- **Botón deshabilitado**: es plano, de color `--surface-2` con texto `--faint`, en lugar de semitransparente. Antes dejaba ver el contenido de atrás.
+- **Pastillas**: el punto de color queda solo en los estados `ok`, `warn` y `bad`. Las pastillas informativas (`brass`, `dim`), como "45 % general", ya no lo llevan.
+- **`<details>` desplegables** (`details.more.card`, `details.tbl`): tienen una flecha que gira al abrir. En Ajustes no se notaba que los servicios y las sedes se despliegan.
+- **`.btn.wa`**: pasa a verde suave (fondo `--wa-soft`, texto `--wa-text`). El verde neón chocaba con la paleta, y sigue reconociéndose como WhatsApp.
+- **Tarjeta de pendiente** (`.pending`): más compacta. Barra de 4 px, avatar de 38 px y avatar alineado arriba.
+- **Hora libre** (`.tslot`): 17 px y sin cortes de línea en la hora.
+- **Bienvenida** (`.welcome`): el aro decorativo ya no tapa el título, y el título se reparte en líneas parejas (`text-wrap: balance`).
+
+### Clases nuevas de la ronda 2
+
+| Clase | Uso |
+|---|---|
+| `.confirm` > `.confirm-mark` (`.ok` / `.bad`) + `h2` + `p` | momento de confirmación. Círculo rosa con brillos de oro rosa; `ok` = verde, `bad` = rojo |
+| `.ticket` > `.ticket-head`, `.ticket-time`, `.ticket-who`, `.ticket-cut`, `.kv`… | resumen de la cita como "ticket": hora grande, línea perforada y el total en serif ciruela |
+| `.profile-head` > `.av` + `div > h2 + .small` | encabezado de la ficha de la clienta |
+| `.group` > `details.more` (sin `.card`) o `.li` | lista agrupada: varias filas en una sola tarjeta (Ajustes) |
+| `.chips.fit` | chips en una fila de columnas iguales (propinas) |
+
+## Ronda 2: pedidos al desarrollador
+
+1. **Confirmación de la reserva**, `src/app/r/[slug]/cita/[id]/page.tsx`:
+   - Reemplazar el `<div style={{textAlign:'center'…}}>` (círculo con estilos en línea y `h2.hero-title`) por esto (el ícono `sparkle` es para "pendiente": se ve como celebración en lugar de alerta):
+     ```tsx
+     <div className="confirm">
+       <div className={'confirm-mark' + (ok ? ' ok' : pending ? '' : ' bad')}>
+         <Icon name={pending ? 'sparkle' : ok ? 'check' : 'x'} />
+       </div>
+       <h2>{pending ? '¡Listo! Solicitud enviada' : …}</h2>
+       <p>…</p>
+     </div>
+     ```
+   - Cambiar el `.card` que sigue por `.ticket`:
+     - fila de arriba → `<div className="ticket-head">`;
+     - hora → `<div className="ticket-time">` (quitar el `style` en línea);
+     - "con …" → `<div className="ticket-who">con {barbero} · {sede}</div>`;
+     - antes de las líneas de servicio, poner `<div className="ticket-cut" />`.
+2. **Ficha de la clienta**, `src/app/app/clientes/[id]/page.tsx` (alrededor de la línea 44): el bloque `row` con el avatar y el nombre (nombre en `fontFamily` en línea) pasa a ser `<div className="profile-head"><Avatar …/><div><h2>{c.name}</h2><div className="small muted">…</div></div></div>`. Hoy el nombre y el teléfono quedan pegados.
+3. **Ajustes → Servicios**, `src/app/app/ajustes/page.tsx` (alrededor de las líneas 103–121): poner los `details.more.card` dentro de un solo `<div className="group">` por bloque (principales / adicionales) y quitarles `card`. Así 15 tarjetas sueltas pasan a ser dos listas compactas. Lo mismo con Sedes.
+4. **Cobrar**, `src/app/app/cobrar/[id]/page.tsx`: al contenedor de las propinas agregarle `fit` (`className="chips fit"`) para que las 4 opciones queden en una fila. Hoy se parten en 2 líneas.
+5. **Agenda, "Por aprobar"**, `src/app/app/agenda/page.tsx` (alrededor de la línea 115): con 6 a 9 pendientes, la agenda del día queda muy abajo.
+   - Mostrar las 2 primeras y el resto dentro de `<details className="more"><summary className="link small">Ver N más</summary>…</details>`.
+   - También se puede usar un resumen de una línea.
+6. **Duraciones**: la agenda y Ajustes muestran "150 min", "105 min". Usar `fmtDuration` ("2 h 30 min"), como ya se hace en las reservas.
+7. **Medios de pago** (`cobrar` y `.pay`): Nequi y Daviplata usan el mismo ícono de celular. Se puede dejar así, o usar `phone` para Nequi y `card` para tarjeta, y agregar una pastilla de color con la marca. Es opcional.
+8. **Entrar como dueño / manicurista**, `src/app/entrar/[rol]/page.tsx`: arriba del ícono del rol, mostrar el `ShopMark` (sin `slug`, sale el frasco). Hoy la pantalla de login es la única sin marca.

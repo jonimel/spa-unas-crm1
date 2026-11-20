@@ -31,6 +31,11 @@ export const TEMPLATES = {
     params: ['nombre', 'fecha', 'hora', 'link'],
     text: 'Hola {nombre}, tu cita del {fecha} a las {hora} fue cancelada por el spa. Disculpa la molestia. Para reservar de nuevo: {link}',
   },
+  cancelada_por_clienta: {
+    to: 'client',
+    params: ['nombre', 'fecha', 'hora', 'link'],
+    text: 'Hola {nombre}, cancelamos tu cita del {fecha} a las {hora} como pediste. Cuando quieras, reserva de nuevo aquí: {link}',
+  },
   recordatorio: {
     to: 'client',
     params: ['nombre', 'hora', 'manicurista', 'sede'],
@@ -39,12 +44,17 @@ export const TEMPLATES = {
   retoque: {
     to: 'client',
     params: ['nombre', 'spa', 'servicio', 'dias', 'link'],
-    text: 'Hola {nombre} 💅 ¡Es hora de tu retoque! Ya van {dias} días desde tu última cita de {servicio} en {spa}. Reserva tu próxima cita aquí: {link}',
+    text: 'Hola {nombre} 💅 Ya van {dias} días desde tu última cita ({servicio}) en {spa}. ¿Agendamos tu retoque? {link}',
   },
   manicurista_nueva_solicitud: {
     to: 'barber',
     params: ['manicurista', 'cliente', 'servicio', 'fecha', 'hora', 'limite'],
     text: '{manicurista}, tienes una nueva solicitud: {cliente} · {servicio} · {fecha} {hora}. Apruébala en la app antes de las {limite}.',
+  },
+  manicurista_cita_cancelada: {
+    to: 'barber',
+    params: ['manicurista', 'cliente', 'fecha', 'hora'],
+    text: '{manicurista}, {cliente} canceló su cita del {fecha} a las {hora}. Ese espacio quedó libre en tu agenda.',
   },
   dueno_sin_respuesta: {
     to: 'owner',

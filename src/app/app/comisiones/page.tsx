@@ -143,7 +143,7 @@ async function BarberView({ user, sp }: { user: CurrentUser; sp: SP }) {
               .join(', ')}
           </>
         )}
-        . Lo define el dueño.
+        . Lo define el spa.
       </div>
 
       <div className="eyebrow">{isRent ? 'Arriendos pagados' : 'Pagos recibidos'}</div>
@@ -208,7 +208,15 @@ async function OwnerView({ user, sp }: { user: CurrentUser; sp: SP }) {
       </div>
 
       <div className="eyebrow">Manicuristas</div>
-      <div className="card list" style={{ paddingBlock: 4 }}>
+      {totals.length === 0 && (
+        <div className="empty">
+          Todavía no tienes manicuristas.{' '}
+          <Link className="link" href="/app/ajustes/manicurista/nuevo">
+            Agregar manicurista →
+          </Link>
+        </div>
+      )}
+      <div className="card list" style={{ paddingBlock: 4, display: totals.length ? undefined : 'none' }}>
         {totals.map((t) => {
           const sc = schemes.get(t.barber_id) ?? null
           const sum = schemeSummary(sc, shop)

@@ -7,7 +7,7 @@ import { STAFF_ROLES } from './roles'
 
 export const metadata = { title: 'Entrar · Equipo' }
 
-// Entrada del equipo: primero se elige quién eres (dueño o manicurista) y después celular + PIN.
+// Entrada del equipo: primero se elige quién eres (dueña o manicurista) y después celular + PIN.
 // Las clientas no entran aquí: reservan desde el link de su spa (/r/...) o desde /reservar.
 export default async function Entrar() {
   if (await currentUser()) redirect('/app')

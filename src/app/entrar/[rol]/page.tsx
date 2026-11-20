@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { PhoneInput } from '@/components/PhoneInput'
 import { Icon } from '@/components/Icon'
+import { ShopMark } from '@/components/ShopLogo'
 import { Flash } from '@/components/ui'
 import { currentUser, LOCK_MINUTES, login } from '@/lib/auth'
 import { normalizeLoginPhone, PHONE_ERROR } from '@/lib/phone'
@@ -39,7 +40,8 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
           <Icon name="back" />
         </Link>
       </div>
-      <div style={{ display: 'grid', placeItems: 'center', margin: '8px 0 10px' }}>
+      <div style={{ display: 'grid', placeItems: 'center', gap: 12, margin: '8px 0 10px' }}>
+        <ShopMark size={44} />
         <span className="role-badge">
           <Icon name={r.icon} />
         </span>
@@ -67,7 +69,7 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
             err === 'phone'
               ? PHONE_ERROR
               : err === 'locked'
-                ? `Demasiados intentos con ese celular. Espera ${LOCK_MINUTES} minutos o pídele al dueño que revise tu PIN.`
+                ? `Demasiados intentos con ese celular. Espera ${LOCK_MINUTES} minutos o pídele a la administración del spa que revise tu PIN.`
                 : err
                   ? 'Celular o PIN incorrecto'
                   : undefined
@@ -76,7 +78,7 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
         <button className="btn" type="submit">
           Entrar como {r.short}
         </button>
-        {rol === 'manicurista' && <p className="small muted">¿Olvidaste tu PIN? Pídele al dueño del spa que te asigne uno nuevo.</p>}
+        {rol === 'manicurista' && <p className="small muted">¿Olvidaste tu PIN? Pídele a la administración del spa que te asigne uno nuevo.</p>}
         <p className="small muted">
           {rol === 'dueno' ? (
             <>
@@ -84,7 +86,7 @@ export default async function EntrarRol({ params, searchParams }: PageProps<'/en
             </>
           ) : (
             <>
-              ¿Eres el dueño? <Link className="link" href="/entrar/dueno">Entra como dueño</Link>
+              ¿Eres la dueña? <Link className="link" href="/entrar/dueno">Entra como dueña o administradora</Link>
             </>
           )}
         </p>

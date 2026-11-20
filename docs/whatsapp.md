@@ -9,14 +9,16 @@ Para enviarlos de verdad:
 
 | Plantilla | Para | Variables en orden |
 |---|---|---|
-| `solicitud_recibida` | cliente | nombre, spa, servicio, fecha, hora, manicurista |
-| `cita_confirmada` | cliente | nombre, fecha, hora, manicurista, sede, dirección |
-| `cita_rechazada` | cliente | nombre, fecha, hora, link |
-| `cita_cancelada` | cliente | nombre, fecha, hora, link |
-| `recordatorio` | cliente | nombre, hora, manicurista, sede |
+| `solicitud_recibida` | clienta | nombre, spa, servicio, fecha, hora, manicurista |
+| `cita_confirmada` | clienta | nombre, fecha, hora, manicurista, sede, dirección |
+| `cita_rechazada` | clienta | nombre, fecha, hora, link |
+| `cita_cancelada` | clienta | nombre, fecha, hora, link |
+| `cancelada_por_clienta` | clienta | nombre, fecha, hora, link |
+| `recordatorio` | clienta | nombre, hora, manicurista, sede |
 | `retoque` | clienta | nombre, spa, servicio, días, link |
 | `manicurista_nueva_solicitud` | manicurista | manicurista, cliente, servicio, fecha, hora, límite |
-| `dueno_sin_respuesta` | dueño | manicurista, cliente, fecha, hora |
+| `manicurista_cita_cancelada` | manicurista | manicurista, cliente, fecha, hora |
+| `dueno_sin_respuesta` | dueña | manicurista, cliente, fecha, hora |
 
 El recordatorio de retoque (`retoque`) sale a las 10 a. m. del día que toca (los días se configuran por servicio en Ajustes → Servicios), solo si la clienta no tiene otra cita después. Las variables `{servicio}` y `{dias}` dicen qué se hizo y hace cuánto.
 

@@ -31,6 +31,7 @@ export default async function Analisis({ searchParams }: PageProps<'/app/analisi
   const branches = await rows<{ id: string; name: string }>('select id, name from branches where tenant_id = $1 and active order by sort', [user.tenant_id])
   const sede = typeof sp.sede === 'string' && branches.some((b) => b.id === sp.sede) ? sp.sede : null
   const st = await statsFor(user.tenant_id, tz, view, month, sede)
+  const hasBarbers = (await rows(`select 1 from users where tenant_id = $1 and role = 'barber' and active limit 1`, [user.tenant_id])).length > 0
 
   const qs = (o: { vista?: View; mes?: string | null; sede?: string | null }) => {
     const q = new URLSearchParams()
@@ -263,7 +264,17 @@ export default async function Analisis({ searchParams }: PageProps<'/app/analisi
       </div>
 
       <div className="eyebrow">Manicuristas</div>
-      <div className="card list" style={{ paddingBlock: 4 }}>
+      {!hasBarbers ? (
+        <div className="empty">
+          Todavía no tienes manicuristas.{' '}
+          <Link className="link" href="/app/ajustes/manicurista/nuevo">
+            Agregar manicurista →
+          </Link>
+        </div>
+      ) : st.byBarber.length === 0 ? (
+        <div className="empty plain">Sin visitas en este periodo.</div>
+      ) : null}
+      <div className="card list" style={{ paddingBlock: 4, display: st.byBarber.length ? undefined : 'none' }}>
         {st.byBarber.map((b) => (
           <div key={b.id} className="li">
             <Avatar name={b.name} sm />

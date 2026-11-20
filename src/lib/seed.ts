@@ -105,7 +105,7 @@ export async function seedIfEmpty(db: PGlite) {
     const q = async <T = { id: string }>(sql: string, p: unknown[] = []) => (await tx.query<T>(sql, p)).rows
     const [t] = await q(`insert into tenants (slug, name, city, timezone) values ($1, 'Spa Uñas Bella', 'Medellín', $2) returning id`, [DEMO.slug, TZ])
     // Por ahora una sola sede (el sistema admite varias: se agregan en Ajustes)
-    const branches = [(await q(`insert into branches (tenant_id, name, address, phone, sort) values ($1, 'El Poblado', 'Cl. 10 #40-25, local 104', '6045550101', 0) returning id`, [t.id]))[0]]
+    const branches = [(await q(`insert into branches (tenant_id, name, address, phone, sort) values ($1, 'El Poblado', 'Cl. 10 #40-25, local 104', '3045550101', 0) returning id`, [t.id]))[0]]
     const [owner] = await q(`insert into users (tenant_id, role, name, phone, pin_hash) values ($1, 'owner', $2, $3, $4) returning id`, [t.id, DEMO.owner.name, DEMO.owner.phone, hashPin(DEMO.owner.pin)])
     const barbers: { id: string; branch: string }[] = []
     for (const b of DEMO.barbers) {
@@ -302,7 +302,7 @@ export async function seedIfEmpty(db: PGlite) {
       refills.push([t.id, client, v.id, line.name, due, v.start, sent ? due : null, due <= now && !sent ? due : null])
       if (sent) {
         const vars = {
-          nombre: firstName(c.name), spa: 'Spa Uñas Bella', servicio: line.name.toLowerCase(),
+          nombre: firstName(c.name), spa: 'Spa Uñas Bella', servicio: line.name,
           dias: String(Math.max(1, Math.round((due.getTime() - v.start.getTime()) / 864e5))), link: bookingLink(DEMO.slug),
         }
         sentMsgs.push([t.id, c.phone, 'client', 'retoque', render('retoque', vars), v.id, 'simulated', due])

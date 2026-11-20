@@ -78,7 +78,7 @@ export default async function Registro({ searchParams }: PageProps<'/registro'>)
             <input id="address" name="address" defaultValue={val('address')} placeholder="Ej.: Cra. 70 #44-10" maxLength={120} autoComplete="street-address" />
           </div>
         </div>
-        <div className="eyebrow">Tú, el dueño</div>
+        <div className="eyebrow">Tus datos</div>
         <div className="field">
           <label htmlFor="owner">Tu nombre</label>
           <div className="in">
@@ -106,7 +106,7 @@ export default async function Registro({ searchParams }: PageProps<'/registro'>)
           Crear mi spa
         </button>
         <p className="small muted">
-          ¿Ya tienes cuenta? <Link href="/entrar/dueno">Entrar como dueño</Link>
+          ¿Ya tienes cuenta? <Link href="/entrar/dueno">Entrar como dueña o administradora</Link>
         </p>
       </form>
     </main>

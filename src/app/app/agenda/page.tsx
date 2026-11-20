@@ -5,7 +5,7 @@ import { requireUser } from '@/lib/auth'
 import { apptList, type ApptView } from '@/lib/booking'
 import { one, rows } from '@/lib/db'
 import { firstName } from '@/lib/phone'
-import { addDaysYmd, atLocal, fmtDayLong, fmtMoney, fmtTime, fmtYmdShort, isYmd, todayYmd } from '@/lib/time'
+import { addDaysYmd, atLocal, fmtDayLong, fmtDuration, fmtMoney, fmtTime, fmtYmdShort, isYmd, todayYmd } from '@/lib/time'
 import { approveAction, readAlert, rejectAction } from '../actions'
 
 export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>) {
@@ -50,13 +50,12 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
   const dayEnd = atLocal(addDaysYmd(date, 1), 0, tz)
   const p2 = [...params, dayStart, dayEnd]
   const day = await apptList(`${where} and a.starts_at >= $${p2.length - 1} and a.starts_at < $${p2.length} and a.status not in ('rejected')`, p2)
-  const alerts = owner
-    ? await rows<{ id: string; title: string; appointment_id: string }>(
-        `select al.id, al.title, al.appointment_id from alerts al join appointments a on a.id = al.appointment_id
-          where al.user_id = $1 and al.read_at is null order by al.created_at desc limit 5`,
-        [user.id],
-      )
-    : []
+  // avisos: a la dueña, solicitudes sin respuesta; a la dueña y a la manicurista, cancelaciones hechas por la clienta
+  const alerts = await rows<{ id: string; kind: string; title: string; appointment_id: string }>(
+    `select al.id, al.kind, al.title, al.appointment_id from alerts al join appointments a on a.id = al.appointment_id
+      where al.user_id = $1 and al.read_at is null order by al.created_at desc limit 5`,
+    [user.id],
+  )
   const cash = await one<{ total: number; n: number }>(
     `select coalesce(sum(p.amount + p.tip), 0)::int total, count(*)::int n from payments p join appointments a on a.id = p.appointment_id
       where ${where} and p.paid_at >= $${p2.length - 1} and p.paid_at < $${p2.length}`,
@@ -93,7 +92,15 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
       {alerts.map((al) => (
         <div key={al.id} className="alert" style={{ marginTop: 12 }}>
           <div className="t">
-            <Icon name="clock" /> Sin respuesta de la manicurista
+            {al.kind === 'client_cancelled' ? (
+              <>
+                <Icon name="x" /> La clienta canceló
+              </>
+            ) : (
+              <>
+                <Icon name="clock" /> Sin respuesta de la manicurista
+              </>
+            )}
           </div>
           <div style={{ margin: '6px 0 10px', lineHeight: 1.45 }}>{al.title}</div>
           <div className="row">
@@ -112,10 +119,20 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
         <>
           <div className="eyebrow">Por aprobar · {pending.length}</div>
           <div className="stack">
-            {pending.map((a) => (
+            {pending.slice(0, 2).map((a) => (
               <PendingCard key={a.id} a={a} now={now} owner={owner} backTo={backTo} />
             ))}
           </div>
+          {pending.length > 2 && (
+            <details className="more" style={{ marginTop: 10 }}>
+              <summary className="link small">Ver {pending.length - 2} más</summary>
+              <div className="stack" style={{ marginTop: 10 }}>
+                {pending.slice(2).map((a) => (
+                  <PendingCard key={a.id} a={a} now={now} owner={owner} backTo={backTo} />
+                ))}
+              </div>
+            </details>
+          )}
         </>
       )}
 
@@ -139,7 +156,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
               <span className="av any">
                 <Icon name="users" />
               </span>
-              <span>Todos</span>
+              <span>Todas</span>
             </Link>
             {barbers.map((b) => (
               <Link key={b.id} href={qs({ manicurista: b.id })} className={'bchip' + (barberF === b.id ? ' on' : '')}>
@@ -180,7 +197,17 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
 
       <div className="eyebrow">Citas del día</div>
       {day.length === 0 ? (
-        <div className="empty">No hay citas este día.</div>
+        <div className="empty">
+          No hay citas este día.
+          {owner && (
+            <>
+              {' '}
+              <Link className="link" href="/app/ajustes">
+                Comparte tu link de reservas →
+              </Link>
+            </>
+          )}
+        </div>
       ) : (
         <div className="tl">
           {day.map((a, i) => {
@@ -193,7 +220,7 @@ export default async function Agenda({ searchParams }: PageProps<'/app/agenda'>)
                 <Link href={`/app/cita/${a.id}`} className={`ap tap is-${a.status}` + (['completed', 'cancelled', 'no_show'].includes(a.status) ? ' done' : '') + (inProgress ? ' now' : '')}>
                   <div className="h">
                     {a.time}
-                    <small>{a.duration_min} min</small>
+                    <small>{fmtDuration(a.duration_min)}</small>
                   </div>
                   <div className="b">
                     <div className="grow">

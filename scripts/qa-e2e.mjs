@@ -75,10 +75,10 @@ await anon.goto(BASE + '/')
 const home = await anon.locator('body').innerText()
 if (!/localhost|127\.0\.0\.1/.test(BASE)) check(!/PIN \d{4}/.test(home), 'en internet la página de inicio no muestra los PIN de prueba')
 check(/Registrar mi spa/.test(home), 'la página de inicio invita a registrar un spa')
-check(/Reservar una cita/.test(home) && /Dueño \/ Administrador/.test(home) && /Manicurista/.test(home), 'el inicio separa clientas (Reservar) del equipo (Dueño / Manicurista)')
+check(/Reservar una cita/.test(home) && /Dueña \/ Administración/.test(home) && /Manicurista/.test(home), 'el inicio separa clientas (Reservar) del equipo (Dueña / Manicurista)')
 await anon.goto(BASE + '/entrar')
 const entrar = await anon.locator('body').innerText()
-check(/Dueño \/ Administrador/.test(entrar) && /Manicurista/.test(entrar), 'Entrar pide elegir Dueño / Administrador o Manicurista')
+check(/Dueña \/ Administración/.test(entrar) && /Manicurista/.test(entrar), 'Entrar pide elegir Dueña / Administración o Manicurista')
 for (const u of [`/r/${SLUG}`, '/reservar']) {
   await anon.goto(BASE + u)
   const t = await anon.locator('body').innerText()
@@ -98,7 +98,7 @@ for (const u of ['/app/agenda', '/app/ajustes', '/app/analisis']) {
 if (!process.env.OWNER) {
   const d = await page('demo 1111')
   await login(d, '1111', 'dueno')
-  check(d.url().includes('/app'), '1111 / 1111 por "Dueño" entra al dueño')
+  check(d.url().includes('/app'), '1111 / 1111 por "Dueña" entra a la dueña')
   const b = await page('demo 1111 manicurista')
   await b.goto(BASE + '/entrar/manicurista')
   await b.fill('input[name=phone]', '1111')
@@ -171,6 +171,10 @@ if (!READONLY) {
     await mine.waitForURL(/ok=/, { timeout: 15000 })
     await client.reload()
     check(/confirmada/i.test(await client.locator('body').innerText()), 'la clienta ve la cita confirmada')
+    const ctext = await client.locator('body').innerText()
+    check(/Agregar a mi calendario/.test(ctext) && /Escribir al spa por WhatsApp/.test(ctext) && /Cancelar mi cita|Faltan menos de 2 horas/.test(ctext), 'la clienta puede agregar la cita al calendario, escribir al spa o cancelar')
+    const ics = await client.request.get(`${BASE}/api/r/${SLUG}/cita/${apptId}/calendario`)
+    check(ics.ok() && /text\/calendar/.test(ics.headers()['content-type'] ?? '') && (await ics.text()).includes('BEGIN:VEVENT'), 'el .ics de la cita se descarga')
 
     // ---------- 5. cobrar: no antes de 3 h; luego doble toque en una clienta de paso ----------
     await mine.goto(`${BASE}/app/cita/${apptId}`)
@@ -189,7 +193,7 @@ if (!READONLY) {
       await owner.goto(BASE + '/app/nueva')
       await owner.locator('#barber').selectOption({ index: i })
       await owner.fill('#name', 'QA Clienta de Paso')
-      await owner.getByRole('button', { name: 'Guardar' }).click()
+      await owner.getByRole('button', { name: /Registrar y cobrar/ }).click()
       await owner.waitForURL(/cobrar|err=/, { timeout: 15000 }).catch(() => {})
       if (/\/app\/cobrar\//.test(owner.url())) payPage = owner
       else lastErr = decodeURIComponent(owner.url().split('err=')[1] ?? owner.url())
@@ -250,6 +254,7 @@ if (!READONLY) {
     await fresh.goto(`${BASE}/r/${link}`)
     const txt = (await fresh.locator('body').innerText()).toLowerCase()
     check(txt.includes(`qa spa ${stamp}`) && !txt.includes('spa uñas bella'), 'la reserva muestra el nombre del spa nuevo, no Spa Uñas Bella')
+    check(txt.includes('preparando nuestra agenda'), 'un spa sin manicuristas no deja a la clienta atascada (aviso + WhatsApp)')
   }
   await fresh.goto(BASE + '/app/clientes')
   check(!(await fresh.locator('body').innerText()).includes('Valentina Pérez'), 'el spa nuevo no ve clientas de Spa Uñas Bella')

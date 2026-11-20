@@ -1,5 +1,8 @@
 'use server'
 
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
+import { cancelByClient } from '@/lib/appointments'
 import { BookingError, createAppointment, tenantBySlug } from '@/lib/booking'
 import { normalizeCoPhone } from '@/lib/phone'
 import { one } from '@/lib/db'
@@ -56,4 +59,19 @@ export async function requestBooking(input: {
     console.error(e)
     return { ok: false, error: 'No pudimos guardar tu solicitud. Intenta de nuevo.' }
   }
+}
+
+/** "Cancelar mi cita" desde la página de la reserva (formulario con confirmación). */
+export async function cancelMyAppointment(fd: FormData) {
+  const slug = String(fd.get('slug') ?? '')
+  const id = String(fd.get('id') ?? '')
+  const to = `/r/${encodeURIComponent(slug)}/cita/${encodeURIComponent(id)}`
+  try {
+    await cancelByClient(slug, id)
+  } catch (e) {
+    if (e instanceof BookingError) redirect(`${to}?err=${encodeURIComponent(e.message)}`)
+    throw e
+  }
+  revalidatePath(to)
+  redirect(`${to}?ok=${encodeURIComponent('Listo, cancelamos tu cita. Te enviamos la confirmación por WhatsApp.')}`)
 }

@@ -359,6 +359,20 @@ export async function apptList(where: string, params: unknown[], order = 'a.star
   return rs.map(decorate)
 }
 
+/**
+ * Celular de WhatsApp del spa para que la clienta escriba: el de la sede si es un celular,
+ * si no el de la dueña (los códigos cortos de prueba no sirven). null si no hay ninguno.
+ */
+export async function spaWhatsApp(tenantId: string, branchId?: string | null, on?: Queryable) {
+  const r = await one<{ branch: string | null; owner: string | null }>(
+    `select (select phone from branches where id = $2 and tenant_id = $1) branch,
+            (select phone from users where tenant_id = $1 and role = 'owner' and active order by created_at limit 1) owner`,
+    [tenantId, branchId ?? null],
+    on,
+  )
+  return normalizeCoPhone(r?.branch ?? '') ?? normalizeCoPhone(r?.owner ?? '')
+}
+
 function publicBase() {
   const railway = process.env.RAILWAY_PUBLIC_DOMAIN && `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   return (process.env.PUBLIC_URL || railway || 'http://localhost:3000').replace(/\/+$/, '')

@@ -256,7 +256,7 @@ describe('datos de ejemplo', () => {
       expect(new Date(r.sent_at!).getTime()).toBe(new Date(r.due_at).getTime())
       expect(new Date(r.msg_at!).getTime()).toBe(new Date(r.due_at).getTime())
       expect(localParts(new Date(r.due_at), t.timezone).minutes).toBe(10 * 60)
-      expect(r.body).toContain('desde tu última cita de ')
+      expect(r.body).toContain('desde tu última cita (')
     }
   })
 })

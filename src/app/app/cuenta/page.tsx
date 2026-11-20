@@ -15,7 +15,7 @@ export default async function Cuenta({ searchParams }: PageProps<'/app/cuenta'>)
         <div className="grow">
           <b>{user.name}</b>
           <div className="small muted">
-            {user.role === 'owner' ? 'Dueño' : 'Manicurista'} · {fmtPhone(user.phone)}
+            {user.role === 'owner' ? 'Dueña / Administración' : 'Manicurista'} · {fmtPhone(user.phone)}
           </div>
         </div>
       </div>

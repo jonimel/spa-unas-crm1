@@ -2,26 +2,37 @@ import { ShopMark } from '@/components/ShopLogo'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Icon } from '@/components/Icon'
-import { StatusPill } from '@/components/ui'
-import { apptView } from '@/lib/booking'
+import { Flash, StatusPill } from '@/components/ui'
+import { clientCanCancel } from '@/lib/appointments'
+import { apptView, spaWhatsApp } from '@/lib/booking'
 import { rows } from '@/lib/db'
-import { firstName } from '@/lib/phone'
+import { firstName, waLink } from '@/lib/phone'
 import { fmtDuration, fmtMoney } from '@/lib/time'
+import { whatsappMode } from '@/lib/whatsapp'
+import { cancelMyAppointment } from '../../actions'
 
 const UUID = /^[0-9a-f-]{36}$/i
 
-export default async function CitaPublica({ params }: PageProps<'/r/[slug]/cita/[id]'>) {
+export default async function CitaPublica({ params, searchParams }: PageProps<'/r/[slug]/cita/[id]'>) {
   const { slug, id } = await params
+  const sp = await searchParams
   if (!UUID.test(id)) notFound()
   const a = await apptView(id)
   if (!a || a.tenant_slug !== slug) notFound()
-  const msgs = await rows<{ body: string; created_at: Date }>(
-    `select body, created_at from messages where appointment_id = $1 and to_kind = 'client' order by created_at`,
-    [id],
-  )
+  // en producción la clienta ya recibió estos mensajes en su WhatsApp: la tarjeta solo se muestra en modo simulado
+  const msgs =
+    whatsappMode() === 'simulated'
+      ? await rows<{ body: string; created_at: Date }>(
+          `select body, created_at from messages where appointment_id = $1 and to_kind = 'client' order by created_at`,
+          [id],
+        )
+      : []
+  const spaPhone = await spaWhatsApp(a.tenant_id, a.branch_id)
+  const active = a.status === 'pending' || a.status === 'confirmed'
+  const canCancel = clientCanCancel(a)
+  const waText = `Hola, quiero cambiar mi cita del ${a.day} a las ${a.time} (${a.service_name}).`
   const pending = a.status === 'pending'
   const ok = a.status === 'confirmed' || a.status === 'completed'
-  const color = pending ? 'warn' : ok ? 'ok' : 'bad'
   return (
     <main className="page">
       <div className="top">
@@ -33,14 +44,13 @@ export default async function CitaPublica({ params }: PageProps<'/r/[slug]/cita/
           </div>
         </div>
       </div>
-      <div style={{ textAlign: 'center', margin: '22px 0 8px' }}>
-        <div style={{ width: 74, height: 74, borderRadius: '50%', margin: '0 auto', display: 'grid', placeItems: 'center', background: `var(--${color}-soft)`, color: `var(--${color})` }}>
-          <Icon name={pending ? 'clock' : ok ? 'check' : 'x'} size={36} />
+      <Flash ok={sp.ok as string} err={sp.err as string} />
+      <div className="confirm">
+        <div className={'confirm-mark' + (ok ? ' ok' : pending ? '' : ' bad')}>
+          <Icon name={pending ? 'sparkle' : ok ? 'check' : 'x'} />
         </div>
-        <h2 className="hero-title" style={{ fontSize: 40, margin: '16px 0 6px' }}>
-          {pending ? 'Solicitud enviada' : ok ? 'Cita confirmada' : 'Cita no confirmada'}
-        </h2>
-        <p className="muted" style={{ maxWidth: '32ch', margin: '0 auto', lineHeight: 1.5 }}>
+        <h2>{pending ? '¡Listo! Solicitud enviada' : ok ? 'Cita confirmada' : a.status === 'cancelled' ? 'Cita cancelada' : 'Cita no confirmada'}</h2>
+        <p>
           {pending
             ? `${firstName(a.barber_name)} confirma tu cita en máximo 2 horas. Te avisamos por WhatsApp.`
             : ok
@@ -48,28 +58,29 @@ export default async function CitaPublica({ params }: PageProps<'/r/[slug]/cita/
               : 'Puedes elegir otra hora cuando quieras.'}
         </p>
       </div>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="row">
+      <div className="ticket">
+        <div className="ticket-head">
           <StatusPill status={a.status} />
           <span className="grow" />
           <span className="small muted">{a.day}</span>
         </div>
-        <div style={{ fontFamily: 'var(--f-display)', fontSize: 34, marginTop: 10 }}>{a.time}</div>
-        <div className="muted">con {a.barber_name}</div>
-        <div style={{ marginTop: 10 }}>
-          {a.lines.map((l, i) => (
-            <div className="kv" key={i}>
-              <span>
-                {l.is_addon ? '+ ' : ''}
-                {l.name}
-              </span>
-              <span className="num">{fmtMoney(l.price)}</span>
-            </div>
-          ))}
-          <div className="kv">
-            <span>Total · {fmtDuration(a.duration_min)}</span>
-            <span className="num">{fmtMoney(a.price)}</span>
+        <div className="ticket-time">{a.time}</div>
+        <div className="ticket-who">
+          con {a.barber_name} · {a.branch_name}
+        </div>
+        <div className="ticket-cut" />
+        {a.lines.map((l, i) => (
+          <div className="kv" key={i}>
+            <span>
+              {l.is_addon ? '+ ' : ''}
+              {l.name}
+            </span>
+            <span className="num">{fmtMoney(l.price)}</span>
           </div>
+        ))}
+        <div className="kv">
+          <span>Total · {fmtDuration(a.duration_min)}</span>
+          <span className="num">{fmtMoney(a.price)}</span>
         </div>
       </div>
       {msgs.length > 0 && (
@@ -93,12 +104,46 @@ export default async function CitaPublica({ params }: PageProps<'/r/[slug]/cita/
           </div>
         </>
       )}
-      <div className="stack" style={{ marginTop: 18 }}>
+      {active && (
+        <div className="stack" style={{ marginTop: 18 }}>
+          <a className="btn ghost" href={`/api/r/${slug}/cita/${id}/calendario`} download>
+            <Icon name="cal" /> Agregar a mi calendario
+          </a>
+          {spaPhone && (
+            <a className="btn wa" href={waLink(spaPhone, waText)} target="_blank" rel="noreferrer">
+              <Icon name="wa" /> Escribir al spa por WhatsApp
+            </a>
+          )}
+        </div>
+      )}
+      <div className="stack" style={{ marginTop: 12 }}>
         <Link className="btn ghost" href={`/r/${slug}`}>
           {ok || pending ? 'Reservar otra cita' : 'Elegir otra hora'}
         </Link>
-        <p className="small muted" style={{ textAlign: 'center' }}>¿Necesitas cambiarla? Escríbenos por WhatsApp.</p>
       </div>
+      {active &&
+        (canCancel ? (
+          <details className="more card" style={{ marginTop: 12 }}>
+            <summary className="row">
+              <Icon name="x" style={{ color: 'var(--bad)' }} />
+              <b className="grow" style={{ color: 'var(--bad)' }}>
+                Cancelar mi cita
+              </b>
+            </summary>
+            <form action={cancelMyAppointment} className="stack" style={{ marginTop: 12 }}>
+              <input type="hidden" name="slug" value={slug} />
+              <input type="hidden" name="id" value={id} />
+              <p className="small muted" style={{ margin: 0 }}>
+                Le avisamos a {firstName(a.barber_name)} y el espacio queda libre para otra clienta. Si solo quieres cambiar la hora, escríbenos por WhatsApp.
+              </p>
+              <button className="btn no">Sí, cancelar mi cita</button>
+            </form>
+          </details>
+        ) : (
+          <p className="small muted" style={{ textAlign: 'center', marginTop: 12 }}>
+            Faltan menos de 2 horas: para cancelar o cambiar, escríbenos por WhatsApp.
+          </p>
+        ))}
     </main>
   )
 }

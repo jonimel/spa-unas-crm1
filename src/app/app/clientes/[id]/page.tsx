@@ -41,10 +41,10 @@ export default async function Cliente({ params, searchParams }: PageProps<'/app/
     <main>
       <Top title="Clienta" back="/app/clientes" />
       <Flash ok={sp.ok as string} />
-      <div className="row" style={{ marginTop: 6 }}>
+      <div className="profile-head">
         <Avatar name={c.name} />
-        <div className="grow">
-          <div style={{ fontFamily: 'var(--f-display)', fontSize: 28, lineHeight: 1 }}>{c.name}</div>
+        <div>
+          <h2>{c.name}</h2>
           <div className="small muted">
             {c.phone ? `+57 ${fmtPhone(c.phone)}` : 'Sin celular'} · clienta desde {fmtDay(new Date(c.created_at), tz)}
           </div>

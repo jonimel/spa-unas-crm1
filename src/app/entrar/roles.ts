@@ -1,11 +1,11 @@
 import type { IconName } from '@/components/Icon'
 
 // Las dos puertas de entrada del equipo. El rol real lo decide la cuenta: si una manicurista entra
-// por "Dueño", igual llega a su propia agenda (no hay nada que ganar ni que perder).
+// por "Dueña", igual llega a su propia agenda (no hay nada que ganar ni que perder).
 export const STAFF_ROLES = {
   dueno: {
-    title: 'Dueño / Administrador',
-    short: 'dueño',
+    title: 'Dueña / Administración',
+    short: 'dueña o administradora',
     desc: 'Todo el spa: agenda del equipo, cobros, pagos y análisis',
     icon: 'chart',
   },

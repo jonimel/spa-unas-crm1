@@ -61,6 +61,40 @@ export async function cancel(user: CurrentUser, id: string, reason?: string) {
     })
 }
 
+/** Hasta cuánto antes de la hora de inicio la clienta puede cancelar sola desde su link. */
+export const CLIENT_CANCEL_MIN_MS = 2 * 3600_000
+
+export function clientCanCancel(a: Pick<ApptView, 'status' | 'starts_at'>, now = new Date()) {
+  return ['pending', 'confirmed'].includes(a.status) && new Date(a.starts_at).getTime() - now.getTime() >= CLIENT_CANCEL_MIN_MS
+}
+
+/**
+ * La clienta cancela su propia cita desde la página de su reserva (el link es privado: lleva el id de la cita).
+ * Le confirmamos por WhatsApp y avisamos a su manicurista (WhatsApp + aviso en la app) y a la dueña (aviso en la app).
+ */
+export async function cancelByClient(slug: string, id: string, now = new Date()) {
+  const a = await apptView(id)
+  if (!a || a.tenant_slug !== slug) throw new BookingError('Cita no encontrada')
+  if (!['pending', 'confirmed'].includes(a.status)) throw new BookingError('Esta cita ya no se puede cancelar')
+  if (!clientCanCancel(a, now)) throw new BookingError('Faltan menos de 2 horas para tu cita: escríbenos por WhatsApp para cancelarla.')
+  await transition(id, ['pending', 'confirmed'], `status = 'cancelled', decided_at = now(), cancel_reason = $3`, ['Cancelada por la clienta'], 'Esta cita ya no se puede cancelar')
+  await one(`update alerts set read_at = now() where appointment_id = $1 and read_at is null`, [id])
+  const title = `${a.client_name} canceló su cita del ${a.day}, ${a.time} (${a.service_name})`
+  const staff = await rows<{ id: string }>(`select id from users where tenant_id = $1 and active and (role = 'owner' or id = $2)`, [a.tenant_id, a.barber_id])
+  for (const u of staff)
+    await one(`insert into alerts (tenant_id, user_id, kind, title, appointment_id) values ($1, $2, 'client_cancelled', $3, $4)`, [a.tenant_id, u.id, title, id])
+  if (a.client_phone)
+    await sendWhatsApp({
+      tenantId: a.tenant_id, toPhone: a.client_phone, template: 'cancelada_por_clienta', appointmentId: id,
+      vars: { nombre: firstName(a.client_name), fecha: a.day, hora: a.time, link: bookingLink(a.tenant_slug) },
+    })
+  if (a.barber_phone)
+    await sendWhatsApp({
+      tenantId: a.tenant_id, toPhone: a.barber_phone, template: 'manicurista_cita_cancelada', appointmentId: id,
+      vars: { manicurista: firstName(a.barber_name), cliente: a.client_name, fecha: a.day, hora: a.time },
+    })
+}
+
 export async function markNoShow(user: CurrentUser, id: string) {
   const a = await loadForUser(user, id)
   if (a.status !== 'confirmed') throw new BookingError('Solo una cita confirmada puede marcarse como "no vino"')
@@ -232,7 +266,7 @@ async function sendRefillReminders(now: Date) {
     const days = c.starts_at ? Math.max(1, Math.round((now.getTime() - new Date(c.starts_at).getTime()) / 864e5)) : 0
     await sendWhatsApp({
       tenantId: r.tenant_id, toPhone: c.phone, template: 'retoque', appointmentId: r.appointment_id ?? undefined,
-      vars: { nombre: firstName(c.name), spa: c.tenant_name, servicio: r.service_name.toLowerCase(), dias: String(days), link: bookingLink(c.slug) },
+      vars: { nombre: firstName(c.name), spa: c.tenant_name, servicio: r.service_name, dias: String(days), link: bookingLink(c.slug) },
     })
   }
 }

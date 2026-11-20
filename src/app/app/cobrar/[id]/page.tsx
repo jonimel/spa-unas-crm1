@@ -82,7 +82,7 @@ export default async function Cobrar({ params, searchParams }: PageProps<'/app/c
           </label>
 
           <div className="eyebrow">Propina</div>
-          <div className="chips">
+          <div className="chips fit">
             {[0, 2000, 5000, 10000].map((v) => (
               <label key={v} className="chip">
                 <input type="radio" name="tip" value={v} defaultChecked={v === 0} />

@@ -45,6 +45,8 @@
   --wa: #25d366;
   --wa-ink: #062b14;
   --wa-text: #1a7f43;
+  --wa-soft: #e6f6ec;
+  --wa-line: rgba(26, 127, 67, .3);
   --bubble: #dcf5d3;
   --bubble-ink: #15301b;
   /* forma */
@@ -97,6 +99,8 @@
     --info: #a9c1ec;
     --info-soft: rgba(169, 193, 236, .14);
     --wa-text: #4fdc87;
+    --wa-soft: rgba(79, 220, 135, .1);
+    --wa-line: rgba(79, 220, 135, .35);
     --bubble: #123d2a;
     --bubble-ink: #e7fbe9;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, .3);
@@ -164,8 +168,8 @@ input { font: inherit; color: inherit; }
 .btn:hover:not(:disabled) { background: var(--brass-hover); }
 .btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid var(--line); box-shadow: var(--shadow-1); }
 .btn.ghost:hover:not(:disabled) { background: var(--surface); border-color: var(--brass); color: var(--brass); }
-.btn.wa { background: var(--wa); color: var(--wa-ink); box-shadow: none; }
-.btn.wa:hover:not(:disabled) { background: #1fc05b; }
+.btn.wa { background: var(--wa-soft); color: var(--wa-text); border: 1px solid var(--wa-line); box-shadow: none; }
+.btn.wa:hover:not(:disabled) { background: var(--wa-soft); border-color: var(--wa-text); }
 .btn.sm { padding: 10px 14px; min-height: 44px; font-size: 13.5px; border-radius: 99px; box-shadow: none; }
 .btn.ok { background: var(--ok); color: var(--ok-ink); box-shadow: none; }
 .btn.ok:hover:not(:disabled) { background: var(--ok); filter: brightness(1.08); }
@@ -175,7 +179,7 @@ input { font: inherit; color: inherit; }
 .cta { position: sticky; bottom: 0; margin: 20px -16px -28px; padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--bg) 72%, transparent); z-index: 4; }
 
 .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; letter-spacing: .01em; padding: 4px 10px; border-radius: 99px; white-space: nowrap; }
-.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.pill.ok::before, .pill.warn::before, .pill.bad::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
@@ -221,7 +225,11 @@ input { font: inherit; color: inherit; }
 .sum dd { margin: 0; text-align: right; font-weight: 600; }
 
 /* agenda */
-.pending { border: 1.5px solid var(--warn-line); background: linear-gradient(var(--warn-soft), var(--warn-soft)), var(--surface); border-radius: var(--r-lg); padding: 15px; }
+.pending { border: 1.5px solid var(--warn-line); background: linear-gradient(var(--warn-soft), var(--warn-soft)), var(--surface); border-radius: var(--r-lg); padding: 12px 14px 13px; }
+.pending .bar { height: 4px; margin-top: 7px; }
+.pending .av { width: 38px; height: 38px; font-size: 13px; }
+.pending .row[style] { margin-top: 10px !important; }
+.pending .btn.sm { min-height: 44px; }
 .timer { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--warn); font-weight: 600; }
 .bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 8px; }
 .bar i { display: block; height: 100%; background: var(--warn); border-radius: 3px; }
@@ -339,7 +347,7 @@ a.li:hover .t { color: var(--brass); }
 .role-client { border-color: rgba(var(--brass-rgb), .35); background: linear-gradient(135deg, var(--blush), var(--surface) 72%); }
 .role-client .ri { background: var(--brass); color: var(--brass-ink); }
 
-.btn:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
+.btn:disabled { background: var(--surface-2); color: var(--faint); border: 0; cursor: not-allowed; box-shadow: none; opacity: 1; }
 .xbtn { width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; flex: none; }
 .xbtn:hover { color: var(--brass); }
 .day { min-height: 70px; width: 62px; }
@@ -358,9 +366,9 @@ a.li:hover .t { color: var(--brass); }
 .tslots { display: flex; flex-direction: column; gap: 8px; }
 .tslot { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 10px 14px; border-radius: var(--r); background: var(--surface); border: 1.5px solid var(--line); text-align: left; }
 .tslot:hover:not(.on) { border-color: rgba(var(--brass-rgb), .45); }
-.tslot .tm { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 96px; }
+.tslot .tm { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 92px; white-space: nowrap; }
 .tslot .tm small { font-size: 12.5px; color: var(--muted); font-weight: 500; }
-.tslot .who { flex: 1; min-width: 0; font-size: 13.5px; color: var(--muted); }
+.tslot .who { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); line-height: 1.25; }
 .tslot.on { border-color: var(--brass); background: var(--brass); color: var(--brass-ink); box-shadow: 0 6px 18px rgba(var(--brass-rgb), .22); }
 .tslot.on .who, .tslot.on .tm small { color: var(--brass-ink); }
 .tslot.on .avs .av { border-color: var(--brass); }
@@ -526,8 +534,8 @@ details.mv.void .num { text-decoration: line-through; }
 
 /* bienvenida de la página de reservas */
 .welcome { position: relative; overflow: hidden; margin: 6px 0 4px; padding: 22px 18px 20px; border-radius: var(--r-lg); background: linear-gradient(150deg, var(--blush) 0%, var(--surface-2) 55%, var(--surface) 100%); border: 1px solid rgba(var(--brass-rgb), .12); }
-.welcome::after { content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%; border: 1px solid rgba(181, 124, 105, .35); box-shadow: 0 0 0 18px rgba(181, 124, 105, .07); pointer-events: none; }
-.welcome h2 { font-family: var(--f-display); font-weight: 500; font-size: 32px; line-height: 1.05; margin: 0 0 6px; letter-spacing: -.005em; }
+.welcome::after { content: ""; position: absolute; right: -78px; top: -86px; width: 170px; height: 170px; border-radius: 50%; border: 1px solid rgba(181, 124, 105, .35); box-shadow: 0 0 0 18px rgba(181, 124, 105, .07); pointer-events: none; }
+.welcome h2 { font-family: var(--f-display); font-weight: 500; font-size: 32px; line-height: 1.05; margin: 0 0 8px; letter-spacing: -.005em; text-wrap: balance; position: relative; z-index: 1; }
 .welcome h2 em { font-style: italic; color: var(--brass); }
 .welcome p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 30ch; }
 .welcome .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12.5px; color: var(--fg); }
@@ -562,6 +570,98 @@ details.mv.void .num { text-decoration: line-through; }
 /* separador decorativo */
 .ornament { display: flex; align-items: center; gap: 10px; color: var(--rose-gold); margin: 22px 0 6px; }
 .ornament::before, .ornament::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line), transparent); }
+
+/* ==========================================================================
+   Ronda 2
+   ========================================================================== */
+
+/* Tarjeta de servicio en cuadrícula: nombre + casilla arriba, descripción,
+   y al pie la duración (izq.) y el precio (der.). Sin tocar el markup:
+   .grow se "disuelve" (display: contents) y sus hijos se ubican en la grilla. */
+.opt.svc { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: start; padding: 14px 14px 13px 16px; min-height: 0; }
+.opt.svc > .grow { display: contents; }
+.opt.svc .t { grid-column: 1; grid-row: 1; align-self: center; line-height: 1.25; }
+.opt.svc .d { grid-column: 1 / -1; grid-row: 2; margin-top: 0; }
+.opt.svc .svc-meta { grid-column: 1; grid-row: 3; margin-top: 8px; }
+.opt.svc .price { grid-column: 2; grid-row: 3; align-self: center; font-size: 21px; line-height: 1.1; }
+.opt.svc::after { grid-column: 2; grid-row: 1; align-self: center; justify-self: end; }
+.opt.svc:not(.multi):not(.on)::after { content: none; }
+/* adicionales: una sola fila (nombre / +precio / casilla) y la nota debajo */
+.opt.svc.addon { grid-template-columns: minmax(0, 1fr) auto auto; padding: 11px 14px 11px 16px; }
+.opt.svc.addon .t { grid-row: 1; }
+.opt.svc.addon .d { grid-column: 1; grid-row: 2; }
+.opt.svc.addon .price { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 18px; }
+.opt.svc.addon::after { grid-column: 3; grid-row: 1 / span 2; }
+.dur { background: var(--surface-2); }
+.opt.on .dur { background: var(--surface); }
+/* casilla con un pequeño "pop" al marcar */
+.opt.multi.on::after, .opt.on::after { animation: pop .22s var(--ease); }
+@keyframes pop { 0% { transform: scale(.6); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+/* la barra inferior con total se vuelve un resumen sólido */
+.cta { background: color-mix(in srgb, var(--bg) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--line); box-shadow: 0 -10px 24px rgba(74, 33, 52, .06); padding-top: 12px; }
+.total-bar { margin-bottom: 10px; }
+.total-bar span { font-weight: 500; }
+
+/* <details> desplegables: flecha que gira, para que se note que se abren */
+details.more > summary, details.tbl > summary { position: relative; }
+details.more.card > summary, .group > details.more > summary { padding-right: 26px; }
+details.more.card > summary::after, .group > details.more > summary::after, details.tbl > summary::after {
+  content: ""; position: absolute; right: 2px; top: 50%; width: 8px; height: 8px; margin-top: -6px;
+  border-right: 1.8px solid var(--muted); border-bottom: 1.8px solid var(--muted); transform: rotate(45deg); transition: transform .2s var(--ease);
+}
+details.tbl > summary { padding-right: 18px; display: inline-flex; }
+details.more.card[open] > summary::after, .group > details.more[open] > summary::after, details.tbl[open] > summary::after { transform: rotate(-135deg); margin-top: -2px; }
+details.more.card { padding: 13px 14px; }
+details.more.card[open] { border-color: rgba(var(--brass-rgb), .35); }
+details.more.card > summary:hover .grow > :first-child { color: var(--brass); }
+
+/* confirmación de la reserva (página /r/<spa>/cita/<id>) */
+.confirm { text-align: center; margin: 18px 0 6px; }
+.confirm h2 { font-family: var(--f-display); font-weight: 500; font-size: 38px; line-height: 1.02; margin: 18px 0 8px; letter-spacing: -.01em; text-wrap: balance; }
+.confirm p { color: var(--muted); max-width: 32ch; margin: 0 auto; line-height: 1.5; }
+.confirm-mark { position: relative; width: 84px; height: 84px; margin: 6px auto 0; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 30% 25%, #fff 0, var(--blush) 70%); color: var(--brass); box-shadow: 0 0 0 8px var(--brass-soft), 0 10px 30px rgba(var(--brass-rgb), .18); animation: pop .5s var(--ease); }
+.confirm-mark .ic { width: 38px; height: 38px; stroke-width: 1.8; }
+.confirm-mark::before, .confirm-mark::after { content: ""; position: absolute; width: 14px; height: 14px; background: var(--rose-gold); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.confirm-mark::before { top: -6px; right: -10px; }
+.confirm-mark::after { bottom: 2px; left: -16px; width: 10px; height: 10px; opacity: .8; }
+.confirm-mark.ok { background: radial-gradient(circle at 30% 25%, #fff 0, var(--ok-soft) 70%); color: var(--ok); box-shadow: 0 0 0 8px var(--ok-soft); }
+.confirm-mark.bad { background: var(--bad-soft); color: var(--bad); box-shadow: 0 0 0 8px var(--bad-soft); }
+.confirm-mark.bad::before, .confirm-mark.bad::after { display: none; }
+@media (prefers-color-scheme: dark) { .confirm-mark, .confirm-mark.ok { background: var(--blush); } .confirm-mark.ok { background: var(--ok-soft); } }
+
+/* "ticket" de la cita: hora grande, perforación y líneas de servicios */
+.ticket { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 16px 16px 6px; margin-top: 20px; }
+.ticket-head { display: flex; align-items: center; gap: 10px; }
+.ticket-time { font-family: var(--f-display); font-weight: 600; font-size: 40px; line-height: 1; margin: 14px 0 4px; letter-spacing: -.01em; }
+.ticket-who { color: var(--muted); font-size: 13.5px; }
+.ticket-cut { position: relative; height: 1px; margin: 16px -16px 6px; border-top: 1.5px dashed var(--line); }
+.ticket-cut::before, .ticket-cut::after { content: ""; position: absolute; top: -10px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); }
+.ticket-cut::before { left: -10px; clip-path: inset(0 0 0 50%); }
+.ticket-cut::after { right: -10px; clip-path: inset(0 50% 0 0); }
+.ticket .kv:last-child { font-size: 14.5px; }
+.ticket .kv:last-child span:last-child { font-family: var(--f-display); font-size: 22px; color: var(--brass); }
+
+/* encabezado de la ficha de la clienta */
+.profile-head { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
+.profile-head .av { width: 56px; height: 56px; font-size: 18px; }
+.profile-head h2 { font-family: var(--f-display); font-weight: 600; font-size: 30px; line-height: 1.05; margin: 0 0 4px; }
+.profile-head .small { line-height: 1.4; }
+
+/* lista agrupada (ajustes): varias filas dentro de una sola tarjeta */
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-1); padding: 0 14px; }
+.group > * { border-bottom: 1px solid var(--line); }
+.group > *:last-child { border-bottom: 0; }
+.group > details.more { padding: 12px 0; border-radius: 0; background: none; border-left: 0; border-right: 0; border-top: 0; box-shadow: none; }
+
+/* propinas u opciones cortas en una sola fila de columnas iguales */
+.chips.fit { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
+.chips.fit .chip { justify-content: center; padding: 11px 6px; font-variant-numeric: tabular-nums; }
+.pending a.row { align-items: flex-start; }
+
+/* agenda: una línea de detalle más compacta */
+.ap .b .small { line-height: 1.35; }
+.ap .h small { margin-top: 2px; }
 
 /* animaciones */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
